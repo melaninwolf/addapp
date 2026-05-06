@@ -57,6 +57,11 @@ export default function App() {
               <span>Journal</span>
               <span className="soon">soon</span>
             </div>
+            <div className="nav-item disabled">
+              <span className="nav-icon">🎯</span>
+              <span>Focus Session</span>
+              <span className="soon">soon</span>
+            </div>
           </div>
 
           <div className="sidebar-footer">
