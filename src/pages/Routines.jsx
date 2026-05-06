@@ -225,9 +225,20 @@ function RoutineRunner({ routine, onFinish }) {
 
   function fireNotif(xp) {
     if (!('Notification' in window)) return
-    const send = () => new Notification(`${routine.name} complete! 🎉`, { body: `You earned +${xp} XP. Check your breakdown.` })
+    const send = () => {
+      try {
+        new Notification(`${routine.name} complete! 🎉`, {
+          body: `You earned +${xp} XP. Tap to see your breakdown.`,
+          requireInteraction: true,
+          tag: 'addapp-routine-complete',
+          renotify: true,
+        })
+      } catch(e) { console.log('Notification error:', e) }
+    }
     if (Notification.permission === 'granted') send()
-    else if (Notification.permission === 'default') Notification.requestPermission().then(p => { if (p === 'granted') send() })
+    else if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => { if (p === 'granted') send() })
+    }
   }
 
   function advance(newQueue, newDeferred, newDoneCount, newSkipped, logEntry) {
@@ -367,7 +378,9 @@ function RoutineRunner({ routine, onFinish }) {
         <div className="step-actions">
           <button className="act-done" onClick={handleDone}>✓ Done</button>
           <button className="act-skip" onClick={handleSkip}>Skip</button>
-          <button className="act-later" onClick={handleLater}>Do later ↓</button>
+          {upcoming.length > 0 && (
+            <button className="act-later" onClick={handleLater}>Do later ↓</button>
+          )}
         </div>
       </div>
 
