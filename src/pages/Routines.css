@@ -132,3 +132,11 @@
 .complete-title { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
 .complete-xp { font-family: var(--mono); font-size: 32px; color: var(--green); font-weight: 500; margin-bottom: 8px; }
 .complete-note { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+/* OVERTIME */
+.step-card.overtime { border-color: var(--red) !important; box-shadow: 0 0 32px var(--red-bg) !important; }
+.step-card.overtime .step-card-label { color: var(--red) !important; }
+.step-card.overtime .step-card-timer { color: var(--red) !important; }
+.step-card.overtime .step-timer-fill { background: var(--red) !important; }
+.step-card.overtime .step-timer-track { background: var(--red-bg) !important; }
+.step-card-limit { font-size: 18px; font-weight: 400; color: var(--text3); font-family: var(--mono); margin-left: 4px; }

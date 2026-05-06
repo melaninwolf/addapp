@@ -138,8 +138,8 @@ function RoutineRunner({ routine, onFinish }) {
   const step = queue[stepIdx]
   const isDeferred = step?.deferred || false
   const totalSecs = step ? step.dur * 60 : 0
-  const remaining = Math.max(0, totalSecs - elapsed)
-  const pct = totalSecs > 0 ? Math.round((remaining / totalSecs) * 100) : 0
+  const isOverTime = elapsed > totalSecs
+  const pct = totalSecs > 0 ? Math.min(100, Math.round((elapsed / totalSecs) * 100)) : 0
   const upcoming = queue.slice(stepIdx + 1)
 
   useEffect(() => {
@@ -153,11 +153,10 @@ function RoutineRunner({ routine, onFinish }) {
   }, [stepIdx])
 
   useEffect(() => {
-    if (remaining === 0 && step) {
+    if (elapsed === totalSecs && step && totalSecs > 0) {
       showToast(`Time's up for "${step.name}" — mark done, skip, or do later!`)
-      clearInterval(timerRef.current)
     }
-  }, [remaining])
+  }, [elapsed])
 
   function showToast(msg) {
     setToast(msg)
@@ -240,10 +239,10 @@ function RoutineRunner({ routine, onFinish }) {
         <div className="runner-prog">{stepIdx + 1} / {queue.length}</div>
       </div>
 
-      <div className={`step-card ${isDeferred ? 'deferred' : ''}`}>
+      <div className={`step-card ${isDeferred ? 'deferred' : ''} ${isOverTime ? 'overtime' : ''}`}>
         <div className="step-card-label">{isDeferred ? '🔁 deferred step' : 'current step'}</div>
         <div className="step-card-name">{step?.name}</div>
-        <div className="step-card-timer">{formatTimer(remaining)}</div>
+        <div className="step-card-timer">{formatTimer(elapsed)}<span className="step-card-limit"> / {step?.dur}m</span></div>
         <div className="step-timer-track">
           <div className="step-timer-fill" style={{ width: pct + '%' }} />
         </div>
