@@ -133,6 +133,7 @@ function RoutineRunner({ routine, onFinish }) {
   const [skipped, setSkipped] = useState([])
   const [finished, setFinished] = useState(false)
   const [toast, setToast] = useState('')
+  const [stepLog, setStepLog] = useState([])
   const timerRef = useRef(null)
 
   const step = queue[stepIdx]
@@ -142,9 +143,7 @@ function RoutineRunner({ routine, onFinish }) {
   const pct = totalSecs > 0 ? Math.min(100, Math.round((elapsed / totalSecs) * 100)) : 0
   const upcoming = queue.slice(stepIdx + 1)
 
-  useEffect(() => {
-    setElapsed(0)
-  }, [stepIdx])
+  useEffect(() => { setElapsed(0) }, [stepIdx])
 
   useEffect(() => {
     clearInterval(timerRef.current)
@@ -163,16 +162,27 @@ function RoutineRunner({ routine, onFinish }) {
     setTimeout(() => setToast(''), 4000)
   }
 
-  function advance(newQueue, newDeferred, newDoneCount, newSkipped) {
+  function fireNotif(xp) {
+    if (!('Notification' in window)) return
+    const send = () => new Notification(`${routine.name} complete! 🎉`, { body: `You earned +${xp} XP. Check your breakdown.` })
+    if (Notification.permission === 'granted') send()
+    else if (Notification.permission === 'default') Notification.requestPermission().then(p => { if (p === 'granted') send() })
+  }
+
+  function advance(newQueue, newDeferred, newDoneCount, newSkipped, logEntry) {
+    const newLog = logEntry ? [...stepLog, logEntry] : stepLog
     const nextIdx = stepIdx + 1
     if (nextIdx >= newQueue.length) {
       clearInterval(timerRef.current)
+      setStepLog(newLog)
       setQueue(newQueue)
       setDeferred(newDeferred)
       setDoneCount(newDoneCount)
       setSkipped(newSkipped)
       setFinished(true)
+      fireNotif(newDoneCount * 10)
     } else {
+      setStepLog(newLog)
       setQueue(newQueue)
       setDeferred(newDeferred)
       setDoneCount(newDoneCount)
@@ -182,11 +192,13 @@ function RoutineRunner({ routine, onFinish }) {
   }
 
   function handleDone() {
-    advance(queue, deferred, doneCount + 1, skipped)
+    const log = { name: step.name, target: step.dur * 60, actual: elapsed, status: 'done' }
+    advance(queue, deferred, doneCount + 1, skipped, log)
   }
 
   function handleSkip() {
-    advance(queue, deferred, doneCount, [...skipped, step])
+    const log = { name: step.name, target: step.dur * 60, actual: elapsed, status: 'skipped' }
+    advance(queue, deferred, doneCount, [...skipped, step], log)
   }
 
   function handleLater() {
@@ -196,12 +208,15 @@ function RoutineRunner({ routine, onFinish }) {
     newQueue.push(deferredStep)
     const newDeferred = [...deferred, deferredStep]
     showToast(`"${step.name}" moved to end of routine`)
-    // don't increment stepIdx — next step slides into current position
     if (stepIdx >= newQueue.length) {
       clearInterval(timerRef.current)
+      const log = { name: step.name, target: step.dur * 60, actual: elapsed, status: 'deferred' }
+      const newLog = [...stepLog, log]
+      setStepLog(newLog)
       setQueue(newQueue)
       setDeferred(newDeferred)
       setFinished(true)
+      fireNotif(doneCount * 10)
     } else {
       setQueue(newQueue)
       setDeferred(newDeferred)
@@ -211,19 +226,56 @@ function RoutineRunner({ routine, onFinish }) {
 
   if (finished) {
     const xp = doneCount * 10
+    const totalTarget = stepLog.reduce((a, s) => a + s.target, 0)
+    const totalActual = stepLog.reduce((a, s) => a + s.actual, 0)
+    const allPerfect = doneCount === routine.steps.length
     return (
       <div className="runner-complete">
-        <div className="complete-emoji">{doneCount === routine.steps.length ? '🎉' : '✅'}</div>
-        <h2 className="complete-title">
-          {doneCount === routine.steps.length ? 'Perfect routine!' : 'Routine finished!'}
-        </h2>
+        <div className="complete-emoji">{allPerfect ? '🎉' : '✅'}</div>
+        <h2 className="complete-title">{allPerfect ? 'Perfect routine!' : 'Routine finished!'}</h2>
         <div className="complete-xp">+{xp} XP</div>
-        {skipped.length > 0 && (
-          <p className="complete-note">{skipped.length} step{skipped.length > 1 ? 's' : ''} skipped</p>
-        )}
-        {deferred.filter(d => !queue.some(q => q.id === d.id && !q.deferred)).length > 0 && (
-          <p className="complete-note">{deferred.length} deferred — try to fit them in later!</p>
-        )}
+        <div className="analysis-totals">
+          <div className="analysis-total-item">
+            <span className="at-label">Time planned</span>
+            <span className="at-value">{formatTimer(totalTarget)}</span>
+          </div>
+          <div className="analysis-divider">vs</div>
+          <div className="analysis-total-item">
+            <span className="at-label">Time taken</span>
+            <span className={`at-value ${totalActual > totalTarget ? 'over' : 'under'}`}>{formatTimer(totalActual)}</span>
+          </div>
+        </div>
+        <div className="analysis-list">
+          <div className="analysis-list-label">Step breakdown</div>
+          {stepLog.map((s, i) => {
+            const diff = s.actual - s.target
+            const isOver = diff > 0
+            const maxVal = Math.max(s.target, s.actual, 1)
+            const actualPct = Math.round((s.actual / maxVal) * 100)
+            const targetPct = Math.round((s.target / maxVal) * 100)
+            return (
+              <div key={i} className="analysis-row">
+                <div className="analysis-row-top">
+                  <span className="analysis-step-name">{s.name}</span>
+                  <span className={`analysis-badge ${s.status === 'done' ? (isOver ? 'over' : 'ontime') : s.status}`}>
+                    {s.status === 'done' ? (isOver ? 'over time' : 'on time') : s.status}
+                  </span>
+                </div>
+                <div className="analysis-bar-track">
+                  <div className={`analysis-bar-fill ${isOver ? 'over' : 'under'}`} style={{width: actualPct+'%'}} />
+                  <div className="analysis-bar-marker" style={{left: targetPct+'%'}} />
+                </div>
+                <div className="analysis-row-times">
+                  <span className="art-actual">{formatTimer(s.actual)} taken</span>
+                  <span className={`art-diff ${isOver ? 'over' : 'under'}`}>
+                    {isOver ? '+' : '-'}{formatTimer(Math.abs(diff))} {isOver ? 'over' : 'under'}
+                  </span>
+                  <span className="art-target">{formatTimer(s.target)} planned</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
         <button className="btn-primary" style={{marginTop:'1.5rem'}} onClick={onFinish}>Back to routines</button>
       </div>
     )
