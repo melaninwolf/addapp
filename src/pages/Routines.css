@@ -172,3 +172,18 @@
 .art-diff.over { color: var(--red); }
 .art-diff.under { color: var(--green); }
 .art-target { color: var(--text3); }
+
+/* DAY SELECTOR */
+.day-quick-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.day-quick { padding: 5px 12px; background: transparent; border: 0.5px solid var(--border); border-radius: 99px; font-size: 12px; color: var(--text2); cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+.day-quick.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.day-picker { display: flex; gap: 4px; }
+.day-btn { width: 36px; height: 36px; border-radius: 50%; border: 0.5px solid var(--border); background: transparent; font-size: 11px; color: var(--text2); cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+.day-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.day-btn:hover:not(.active) { border-color: var(--border2); color: var(--text); }
+
+/* RESET TIMER */
+.step-card-top-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.step-card-top-row .step-card-label { margin-bottom: 0; }
+.reset-timer-btn { width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
+.reset-timer-btn:hover { border-color: var(--accent); color: var(--accent); transform: rotate(-30deg); }

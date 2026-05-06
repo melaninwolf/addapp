@@ -3,7 +3,7 @@ import './Routines.css'
 
 const SAMPLE_ROUTINES = [
   {
-    id: 1, name: 'Morning Routine', time: '07:00', emoji: '🌅',
+    id: 1, name: 'Morning Routine', time: '07:00', emoji: '🌅', days: ['mon','tue','wed','thu','fri','sat','sun'],
     steps: [
       { id: 1, name: 'Drink a glass of water', dur: 2 },
       { id: 2, name: 'Take medication', dur: 1 },
@@ -13,7 +13,7 @@ const SAMPLE_ROUTINES = [
     ]
   },
   {
-    id: 2, name: 'Night Routine', time: '21:30', emoji: '🌙',
+    id: 2, name: 'Night Routine', time: '21:30', emoji: '🌙', days: ['mon','tue','wed','thu','fri','sat','sun'],
     steps: [
       { id: 1, name: 'Put phone away', dur: 1 },
       { id: 2, name: 'Journal — 3 wins today', dur: 5 },
@@ -28,6 +28,18 @@ function fmtTime(t) {
   const [h, m] = t.split(':')
   const hh = parseInt(h)
   return `${hh % 12 || 12}:${m} ${hh >= 12 ? 'PM' : 'AM'}`
+}
+
+
+const ALL_DAYS = ['mon','tue','wed','thu','fri','sat','sun']
+const DAY_LABELS = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' }
+
+function fmtDays(days) {
+  if (!days || days.length === 0) return 'No days'
+  if (days.length === 7) return 'Every day'
+  if (days.length === 5 && !days.includes('sat') && !days.includes('sun')) return 'Weekdays'
+  if (days.length === 2 && days.includes('sat') && days.includes('sun')) return 'Weekends'
+  return days.map(d => DAY_LABELS[d]).join(', ')
 }
 
 function totalMins(steps) {
@@ -45,6 +57,7 @@ function RoutineModal({ routine, onSave, onClose }) {
   const [name, setName] = useState(routine?.name || '')
   const [time, setTime] = useState(routine?.time || '07:00')
   const [emoji, setEmoji] = useState(routine?.emoji || '⚡')
+  const [days, setDays] = useState(routine?.days || ['mon','tue','wed','thu','fri','sat','sun'])
   const [steps, setSteps] = useState(
     routine?.steps.map(s => ({ ...s })) || [{ id: Date.now(), name: '', dur: 5 }]
   )
@@ -61,7 +74,7 @@ function RoutineModal({ routine, onSave, onClose }) {
 
   function save() {
     if (!name.trim() || steps.filter(s => s.name.trim()).length === 0) return
-    onSave({ name: name.trim(), time, emoji, steps: steps.filter(s => s.name.trim()) })
+    onSave({ name: name.trim(), time, days, emoji, steps: steps.filter(s => s.name.trim()) })
   }
 
   return (
@@ -85,6 +98,26 @@ function RoutineModal({ routine, onSave, onClose }) {
             <div className="field" style={{width:120}}>
               <label>Start time</label>
               <input type="time" value={time} onChange={e => setTime(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="field" style={{marginBottom:'1rem'}}>
+            <label>Repeat on</label>
+            <div className="day-quick-row">
+              {[['everyday',['mon','tue','wed','thu','fri','sat','sun']],['weekdays',['mon','tue','wed','thu','fri']],['weekends',['sat','sun']]].map(([label, val]) => (
+                <button key={label} type="button"
+                  className={`day-quick ${JSON.stringify(days.sort()) === JSON.stringify([...val].sort()) ? 'active' : ''}`}
+                  onClick={() => setDays(val)}>{label}</button>
+              ))}
+            </div>
+            <div className="day-picker">
+              {ALL_DAYS.map(d => (
+                <button key={d} type="button"
+                  className={`day-btn ${days.includes(d) ? 'active' : ''}`}
+                  onClick={() => setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])}>
+                  {DAY_LABELS[d]}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -162,6 +195,34 @@ function RoutineRunner({ routine, onFinish }) {
     setTimeout(() => setToast(''), 4000)
   }
 
+  function playSound(type) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      if (type === 'step') {
+        osc.frequency.setValueAtTime(660, ctx.currentTime)
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1)
+        gain.gain.setValueAtTime(0.3, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.3)
+      } else {
+        osc.frequency.setValueAtTime(523, ctx.currentTime)
+        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15)
+        osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3)
+        gain.gain.setValueAtTime(0.3, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.6)
+      }
+    } catch(e) {}
+  }
+
+  function resetTimer() { setElapsed(0) }
+
   function fireNotif(xp) {
     if (!('Notification' in window)) return
     const send = () => new Notification(`${routine.name} complete! 🎉`, { body: `You earned +${xp} XP. Check your breakdown.` })
@@ -180,6 +241,7 @@ function RoutineRunner({ routine, onFinish }) {
       setDoneCount(newDoneCount)
       setSkipped(newSkipped)
       setFinished(true)
+      playSound('finish')
       fireNotif(newDoneCount * 10)
     } else {
       setStepLog(newLog)
@@ -187,6 +249,7 @@ function RoutineRunner({ routine, onFinish }) {
       setDeferred(newDeferred)
       setDoneCount(newDoneCount)
       setSkipped(newSkipped)
+      playSound('step')
       setStepIdx(nextIdx)
     }
   }
@@ -292,7 +355,10 @@ function RoutineRunner({ routine, onFinish }) {
       </div>
 
       <div className={`step-card ${isDeferred ? 'deferred' : ''} ${isOverTime ? 'overtime' : ''}`}>
-        <div className="step-card-label">{isDeferred ? '🔁 deferred step' : 'current step'}</div>
+        <div className="step-card-top-row">
+          <div className="step-card-label">{isDeferred ? '🔁 deferred step' : 'current step'}</div>
+          <button className="reset-timer-btn" onClick={resetTimer} title="Reset timer">↺</button>
+        </div>
         <div className="step-card-name">{step?.name}</div>
         <div className="step-card-timer">{formatTimer(elapsed)}<span className="step-card-limit"> / {step?.dur}m</span></div>
         <div className="step-timer-track">
@@ -371,7 +437,8 @@ export default function Routines() {
                 <div className="rc-emoji">{r.emoji}</div>
                 <div className="rc-info">
                   <div className="rc-name">{r.name}</div>
-                  <div className="rc-meta">{fmtTime(r.time)} &middot; {r.steps.length} steps &middot; {totalMins(r.steps)} min</div>
+                  <div className="rc-meta">{fmtTime(r.time)} &middot; {fmtDays(r.days)}</div>
+                  <div className="rc-meta">{r.steps.length} steps &middot; {totalMins(r.steps)} min</div>
                 </div>
               </div>
               <div className="rc-steps">
