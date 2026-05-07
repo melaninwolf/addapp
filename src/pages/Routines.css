@@ -187,3 +187,7 @@
 .step-card-top-row .step-card-label { margin-bottom: 0; }
 .reset-timer-btn { width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
 .reset-timer-btn:hover { border-color: var(--accent); color: var(--accent); transform: rotate(-30deg); }
+
+/* PAUSE BUTTON */
+.pause-timer-btn { width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.pause-timer-btn:hover { border-color: var(--accent); color: var(--accent); }

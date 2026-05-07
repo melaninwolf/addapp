@@ -167,6 +167,7 @@ function RoutineRunner({ routine, onFinish }) {
   const [finished, setFinished] = useState(false)
   const [toast, setToast] = useState('')
   const [stepLog, setStepLog] = useState([])
+  const [paused, setPaused] = useState(false)
   const timerRef = useRef(null)
 
   const step = queue[stepIdx]
@@ -176,13 +177,15 @@ function RoutineRunner({ routine, onFinish }) {
   const pct = totalSecs > 0 ? Math.min(100, Math.round((elapsed / totalSecs) * 100)) : 0
   const upcoming = queue.slice(stepIdx + 1)
 
-  useEffect(() => { setElapsed(0) }, [stepIdx])
+  useEffect(() => { setElapsed(0); setPaused(false) }, [stepIdx])
 
   useEffect(() => {
     clearInterval(timerRef.current)
-    timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    if (!paused) {
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    }
     return () => clearInterval(timerRef.current)
-  }, [stepIdx])
+  }, [stepIdx, paused])
 
   useEffect(() => {
     if (elapsed === totalSecs && step && totalSecs > 0) {
@@ -368,6 +371,9 @@ function RoutineRunner({ routine, onFinish }) {
       <div className={`step-card ${isDeferred ? 'deferred' : ''} ${isOverTime ? 'overtime' : ''}`}>
         <div className="step-card-top-row">
           <div className="step-card-label">{isDeferred ? '🔁 deferred step' : 'current step'}</div>
+          <button className="pause-timer-btn" onClick={() => setPaused(p => !p)} title={paused ? 'Resume' : 'Pause'}>
+            {paused ? '▶' : '⏸'}
+          </button>
           <button className="reset-timer-btn" onClick={resetTimer} title="Reset timer">↺</button>
         </div>
         <div className="step-card-name">{step?.name}</div>
