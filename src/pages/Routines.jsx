@@ -180,6 +180,12 @@ function RoutineRunner({ routine, onFinish }) {
   useEffect(() => { setElapsed(0); setPaused(false) }, [stepIdx])
 
   useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
+  useEffect(() => {
     clearInterval(timerRef.current)
     if (!paused) {
       timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
@@ -226,6 +232,17 @@ function RoutineRunner({ routine, onFinish }) {
 
   function resetTimer() { setElapsed(0) }
 
+  function fireStepNotif(currentName, nextName) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return
+    try {
+      new Notification(`${currentName} is done`, {
+        body: `Next: ${nextName}`,
+        tag: 'addapp-step',
+        renotify: true,
+      })
+    } catch(e) {}
+  }
+
   function fireNotif(xp) {
     if (!('Notification' in window)) return
     const send = () => {
@@ -269,6 +286,8 @@ function RoutineRunner({ routine, onFinish }) {
   }
 
   function handleDone() {
+    const nextStep = queue[stepIdx + 1]
+    if (nextStep) fireStepNotif(step.name, nextStep.name)
     const log = { name: step.name, target: step.dur * 60, actual: elapsed, status: 'done' }
     advance(queue, deferred, doneCount + 1, skipped, log)
   }
