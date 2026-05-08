@@ -168,6 +168,8 @@ function RoutineRunner({ routine, onFinish }) {
   const [toast, setToast] = useState('')
   const [stepLog, setStepLog] = useState([])
   const [paused, setPaused] = useState(false)
+  const [dragIdx, setDragIdx] = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
   const timerRef = useRef(null)
 
   const step = queue[stepIdx]
@@ -320,13 +322,22 @@ function RoutineRunner({ routine, onFinish }) {
     }
   }
 
-
   function moveStep(fromIdx, toIdx) {
     setQueue(q => {
       const newQ = [...q]
       const temp = newQ[fromIdx]
       newQ[fromIdx] = newQ[toIdx]
       newQ[toIdx] = temp
+      return newQ
+    })
+  }
+
+  function moveStepTo(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return
+    setQueue(q => {
+      const newQ = [...q]
+      const [moved] = newQ.splice(fromIdx, 1)
+      newQ.splice(toIdx, 0, moved)
       return newQ
     })
   }
@@ -426,7 +437,15 @@ function RoutineRunner({ routine, onFinish }) {
           {upcoming.map((s, i) => {
             const qIdx = stepIdx + 1 + i
             return (
-              <div key={s.id + '-' + i} className={`upcoming-item ${s.deferred ? 'up-deferred' : ''}`}>
+              <div
+                key={s.id + '-' + i}
+                className={`upcoming-item ${s.deferred ? 'up-deferred' : ''} ${dragIdx === qIdx ? 'up-dragging' : ''} ${dragOverIdx === qIdx && dragIdx !== qIdx ? 'up-drag-over' : ''}`}
+                draggable
+                onDragStart={() => setDragIdx(qIdx)}
+                onDragOver={e => { e.preventDefault(); setDragOverIdx(qIdx) }}
+                onDrop={() => { if (dragIdx !== null) moveStepTo(dragIdx, qIdx); setDragIdx(null); setDragOverIdx(null) }}
+                onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
+              >
                 <span className="up-n">{stepIdx + 2 + i}</span>
                 <span className="up-name">{s.name}</span>
                 {s.deferred && <span className="up-tag">deferred</span>}
