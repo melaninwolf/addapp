@@ -1,0 +1,163 @@
+.settings-page {
+  padding: 2rem;
+  max-width: 640px;
+}
+
+.settings-header {
+  margin-bottom: 2rem;
+}
+
+.settings-header h1 {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* ── Sections ── */
+
+.settings-section {
+  margin-bottom: 2.5rem;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-row {
+  margin-bottom: 1.25rem;
+}
+
+.setting-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+
+/* ── Mode buttons ── */
+
+.mode-row {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.settings-mode-btn:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.settings-mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ── Colour swatches ── */
+
+.swatch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: transform 0.12s;
+}
+
+.swatch:hover { transform: scale(1.15); }
+
+.swatch.selected {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text);
+}
+
+/* ── Ocean note ── */
+
+.ocean-note {
+  font-size: 13px;
+  color: var(--text2);
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+
+/* ── Font picker ── */
+
+.font-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.font-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: transparent;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: center;
+}
+
+.font-opt:hover {
+  background: var(--bg3);
+}
+
+.font-opt.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.font-preview {
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.font-opt.active .font-preview { color: var(--accent); }
+
+.font-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.font-opt.active .font-name { color: var(--accent); }
+
+.font-sample {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.4;
+}
