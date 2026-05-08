@@ -208,3 +208,107 @@
   transition: color 0.15s;
 }
 .back-btn:hover { color: var(--accent); }
+
+/* ─── MOBILE HEADER (hidden on desktop) ─────────────────────────────────── */
+
+.mobile-header {
+  display: none;
+}
+
+.hamburger-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.hamburger-btn:hover { background: var(--bg3); }
+
+.drawer-backdrop {
+  display: none;
+}
+
+/* ─── RESPONSIVE — MOBILE ≤ 768px ───────────────────────────────────────── */
+
+@media (max-width: 768px) {
+
+  /* Show mobile header, hide collapse toggle */
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    z-index: 200;
+    padding: 0 1rem;
+  }
+
+  .mobile-header .logo {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .sb-toggle { display: none; }
+
+  /* Sidebar becomes a fixed slide-in drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 260px !important;
+    z-index: 400;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .layout.sb-open .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Override any collapsed nav styles on mobile */
+  .layout.sb-collapsed .nav-item {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+  .layout.sb-collapsed .sb-action-btn {
+    justify-content: flex-start;
+    padding: 8px 10px;
+  }
+  .layout.sb-collapsed .sb-action-btns {
+    flex-direction: row;
+  }
+
+  /* Backdrop */
+  .drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 300;
+  }
+
+  /* Main: full width, push down below fixed header */
+  .main {
+    padding-top: 52px;
+    width: 100%;
+  }
+
+  .placeholder-page {
+    padding: 1.25rem;
+  }
+}
