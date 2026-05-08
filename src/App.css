@@ -243,7 +243,7 @@
   .mobile-header {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     position: fixed;
     top: 0;
     left: 0;
@@ -251,14 +251,16 @@
     height: 52px;
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
-    z-index: 200;
+    z-index: 500;
     padding: 0 1rem;
+    gap: 12px;
   }
 
   .mobile-header .logo {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    flex: 1;
+    text-align: center;
+    /* offset the hamburger width so logo appears truly centered */
+    padding-right: 36px;
   }
 
   .sb-toggle { display: none; }
@@ -293,11 +295,14 @@
     flex-direction: row;
   }
 
-  /* Backdrop */
+  /* Backdrop — starts below the mobile header so hamburger stays clickable */
   .drawer-backdrop {
     display: block;
     position: fixed;
-    inset: 0;
+    top: 52px;
+    bottom: 0;
+    left: 0;
+    right: 0;
     background: rgba(0, 0, 0, 0.55);
     z-index: 300;
   }
