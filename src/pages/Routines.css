@@ -203,3 +203,9 @@
   .step-actions { grid-template-columns: 1fr 1fr; }
   .step-actions .act-done { grid-column: 1 / -1; }
 }
+
+/* ── Step reorder arrows ────────────────────────────────── */
+.up-reorder { display: flex; flex-direction: column; gap: 2px; margin-left: 4px; }
+.up-reorder-btn { background: none; border: 1px solid var(--border); border-radius: 3px; color: var(--text3); cursor: pointer; font-size: 7px; padding: 2px 4px; line-height: 1; transition: color 0.15s, border-color 0.15s; }
+.up-reorder-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.up-reorder-btn:disabled { opacity: 0.2; cursor: default; }
