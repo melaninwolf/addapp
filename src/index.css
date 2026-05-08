@@ -1,6 +1,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── OCEAN CALM (default) ────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap');
+
+/* ── OCEAN CALM (default) ─────────────────────────────────── */
+/* Accent is fixed — settings.js does NOT override --accent    */
 :root, [data-theme="ocean"] {
   --bg: #0A1628;
   --bg2: #0F1E35;
@@ -13,13 +16,13 @@
   --accent: #38BDF8;
   --accent2: #0EA5E9;
   --accent-glow: rgba(56,189,248,0.12);
-  --amber: #34D399;
-  --amber-bg: rgba(52,211,153,0.1);
+  --amber: #F59E0B;
+  --amber-bg: rgba(245,158,11,0.1);
   --green: #34D399;
   --green-bg: rgba(52,211,153,0.1);
   --red: #F87171;
   --red-bg: rgba(248,113,113,0.1);
-  --font: 'Syne', sans-serif;
+  --font: 'Lexend', sans-serif;
   --mono: 'DM Mono', monospace;
   --radius: 12px;
   --radius-sm: 8px;
@@ -27,7 +30,8 @@
   --radius-xl: 24px;
 }
 
-/* ── DARK FOCUS ───────────────────────────────────────────── */
+/* ── DARK ─────────────────────────────────────────────────── */
+/* --accent, --accent2, --accent-glow injected by settings.js  */
 [data-theme="dark"] {
   --bg: #0D0D0F;
   --bg2: #141417;
@@ -48,7 +52,8 @@
   --red-bg: rgba(255,107,107,0.1);
 }
 
-/* ── LIGHT & CLEAN ────────────────────────────────────────── */
+/* ── LIGHT ────────────────────────────────────────────────── */
+/* --accent, --accent2, --accent-glow injected by settings.js  */
 [data-theme="light"] {
   --bg: #F7F7F9;
   --bg2: #FFFFFF;
@@ -67,48 +72,6 @@
   --green-bg: rgba(5,150,105,0.08);
   --red: #DC2626;
   --red-bg: rgba(220,38,38,0.08);
-}
-
-/* ── ENERGY ───────────────────────────────────────────────── */
-[data-theme="energy"] {
-  --bg: #0F0A00;
-  --bg2: #1A1100;
-  --bg3: #231700;
-  --border: #3D2800;
-  --border2: #5C3D00;
-  --text: #FFF8ED;
-  --text2: #C49A4A;
-  --text3: #7A5A20;
-  --accent: #F59E0B;
-  --accent2: #D97706;
-  --accent-glow: rgba(245,158,11,0.15);
-  --amber: #FB923C;
-  --amber-bg: rgba(251,146,60,0.1);
-  --green: #84CC16;
-  --green-bg: rgba(132,204,22,0.1);
-  --red: #EF4444;
-  --red-bg: rgba(239,68,68,0.1);
-}
-
-/* ── SOFT ─────────────────────────────────────────────────── */
-[data-theme="soft"] {
-  --bg: #1A1025;
-  --bg2: #221530;
-  --bg3: #2D1D3E;
-  --border: #3D2A55;
-  --border2: #553D70;
-  --text: #F5F0FF;
-  --text2: #C4A8E8;
-  --text3: #7A5A9A;
-  --accent: #E879F9;
-  --accent2: #D946EF;
-  --accent-glow: rgba(232,121,249,0.12);
-  --amber: #F9A8D4;
-  --amber-bg: rgba(249,168,212,0.1);
-  --green: #86EFAC;
-  --green-bg: rgba(134,239,172,0.1);
-  --red: #FCA5A5;
-  --red-bg: rgba(252,165,165,0.1);
 }
 
 html { font-size: 16px; }

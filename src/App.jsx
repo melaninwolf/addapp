@@ -1,110 +1,154 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Routines from './pages/Routines.jsx'
+import Settings from './pages/Settings.jsx'
+import { initSettings, getSettings, saveSettings } from './settings'
 import './App.css'
+import './fonts/fonts.css'
 
-const THEMES = [
-  { id: 'ocean',  label: 'Ocean Calm',    dot: '#38BDF8' },
-  { id: 'dark',   label: 'Dark Focus',    dot: '#8B7EFF' },
-  { id: 'light',  label: 'Light & Clean', dot: '#6355E8' },
-  { id: 'energy', label: 'Energy',        dot: '#F59E0B' },
-  { id: 'soft',   label: 'Soft',          dot: '#E879F9' },
-]
+function AppShell() {
+  const [collapsed, setCollapsed]   = useState(false)
+  const [settings,  setSettings]    = useState(() => getSettings())
+  const navigate = useNavigate()
 
-export default function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('addapp-theme') || 'ocean')
-  const [themeOpen, setThemeOpen] = useState(false)
+  useEffect(() => { initSettings() }, [])
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('addapp-theme', theme)
-  }, [theme])
-
-  function pickTheme(id) {
-    setTheme(id)
-    setThemeOpen(false)
+  function updateSettings(partial) {
+    const next = saveSettings(partial)
+    setSettings(next)
   }
 
-  const currentTheme = THEMES.find(t => t.id === theme)
+  const { mode } = settings
 
   return (
-    <BrowserRouter>
-      <div className="layout">
-        <nav className="sidebar">
-          <div className="logo">add<span>app</span></div>
-          <div className="nav-links">
-            <NavLink to="/" end className={({isActive})=>isActive?'nav-item active':'nav-item'}>
-              <span className="nav-icon">⚡</span>
-              <span>Routines</span>
-            </NavLink>
-            <div className="nav-item disabled">
-              <span className="nav-icon">✅</span>
-              <span>Tasks</span>
-              <span className="soon">soon</span>
-            </div>
-            <div className="nav-item disabled">
-              <span className="nav-icon">📅</span>
-              <span>Calendar</span>
-              <span className="soon">soon</span>
-            </div>
-            <div className="nav-item disabled">
-              <span className="nav-icon">💚</span>
-              <span>Health</span>
-              <span className="soon">soon</span>
-            </div>
-            <div className="nav-item disabled">
-              <span className="nav-icon">📓</span>
-              <span>Journal</span>
-              <span className="soon">soon</span>
-            </div>
-            <div className="nav-item disabled">
-              <span className="nav-icon">🎯</span>
-              <span>Focus Session</span>
-              <span className="soon">soon</span>
-            </div>
-          </div>
+    <div className={`layout${collapsed ? ' sb-collapsed' : ''}`}>
 
-          <div className="sidebar-footer">
-            <div className="theme-switcher">
-              <button className="theme-trigger" onClick={() => setThemeOpen(o => !o)}>
-                <span className="theme-dot" style={{background: currentTheme.dot}} />
-                <span className="theme-trigger-label">{currentTheme.label}</span>
-                <span className="theme-caret">{themeOpen ? '▴' : '▾'}</span>
-              </button>
-              {themeOpen && (
-                <div className="theme-dropdown">
-                  {THEMES.map(t => (
-                    <button
-                      key={t.id}
-                      className={`theme-option ${theme === t.id ? 'active' : ''}`}
-                      onClick={() => pickTheme(t.id)}
-                    >
-                      <span className="theme-dot" style={{background: t.dot}} />
-                      <span>{t.label}</span>
-                      {theme === t.id && <span className="theme-check">✓</span>}
-                    </button>
-                  ))}
-                </div>
+      {/* ── SIDEBAR ── */}
+      <nav className="sidebar">
+
+        {/* Logo + collapse */}
+        <div className="sb-head">
+          {!collapsed && <div className="logo">add<span>app</span></div>}
+          <button
+            className="sb-toggle"
+            onClick={() => setCollapsed(c => !c)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? '▶' : '◀'}
+          </button>
+        </div>
+
+        {/* Nav links */}
+        <div className="nav-links">
+          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={collapsed ? 'Routines' : undefined}>
+            <span className="nav-icon">⚡</span>
+            {!collapsed && <span>Routines</span>}
+          </NavLink>
+
+          {[
+            { icon: '✅', label: 'Tasks'        },
+            { icon: '📅', label: 'Calendar'     },
+            { icon: '💚', label: 'Health'       },
+            { icon: '📓', label: 'Journal'      },
+            { icon: '🎯', label: 'Focus Session' },
+          ].map(item => (
+            <div key={item.label} className="nav-item disabled" title={collapsed ? item.label : undefined}>
+              <span className="nav-icon">{item.icon}</span>
+              {!collapsed && (
+                <>
+                  <span>{item.label}</span>
+                  <span className="soon">soon</span>
+                </>
               )}
             </div>
+          ))}
+        </div>
 
-            <div className="xp-block">
-              <div className="xp-top">
-                <span className="xp-label">LVL 1</span>
-                <span className="xp-pts">0 XP</span>
-              </div>
-              <div className="xp-track">
-                <div className="xp-fill" style={{width:'0%'}}></div>
-              </div>
+        {/* Account + Settings */}
+        <div className="sb-action-btns">
+          <button
+            className="sb-action-btn"
+            onClick={() => navigate('/account')}
+            title={collapsed ? 'Account' : undefined}
+          >
+            <span className="nav-icon">👤</span>
+            {!collapsed && <span>Account</span>}
+          </button>
+          <button
+            className="sb-action-btn"
+            onClick={() => navigate('/settings')}
+            title={collapsed ? 'Settings' : undefined}
+          >
+            <span className="nav-icon">⚙</span>
+            {!collapsed && <span>Settings</span>}
+          </button>
+        </div>
+
+        {/* Sidebar footer: XP + mode strip */}
+        <div className="sidebar-footer">
+
+          <div className="xp-block">
+            <div className="xp-top">
+              <span className="xp-label">LVL 1</span>
+              {!collapsed && <span className="xp-pts">0 XP</span>}
+            </div>
+            <div className="xp-track">
+              <div className="xp-fill" style={{ width: '0%' }} />
             </div>
           </div>
-        </nav>
-        <main className="main">
-          <Routes>
-            <Route path="/" element={<Routines />} />
-          </Routes>
-        </main>
-      </div>
+
+          {/* Quick mode toggle */}
+          <div className="mode-strip">
+            {[
+              { id: 'ocean', icon: '🌊', label: 'Ocean' },
+              { id: 'light', icon: '☀',  label: 'Light' },
+              { id: 'dark',  icon: '🌙', label: 'Dark'  },
+            ].map(m => (
+              <button
+                key={m.id}
+                className={`mode-pill${mode === m.id ? ' active' : ''}`}
+                onClick={() => updateSettings({ mode: m.id })}
+                title={collapsed ? m.label : undefined}
+              >
+                <span>{m.icon}</span>
+                {!collapsed && <span>{m.label}</span>}
+              </button>
+            ))}
+          </div>
+
+        </div>
+      </nav>
+
+      {/* ── MAIN ── */}
+      <main className="main">
+        <Routes>
+          <Route path="/"        element={<Routines />} />
+          <Route path="/settings" element={
+            <Settings
+              settings={settings}
+              onUpdate={updateSettings}
+              onBack={() => navigate('/')}
+            />
+          } />
+          <Route path="/account" element={
+            <div className="placeholder-page">
+              <button className="back-btn" onClick={() => navigate('/')}>← Back</button>
+              <h1>Account</h1>
+              <p>Sign-in and profile settings coming in Phase 8 — Supabase auth.</p>
+            </div>
+          } />
+        </Routes>
+      </main>
+
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
     </BrowserRouter>
   )
 }
