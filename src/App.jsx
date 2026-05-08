@@ -8,25 +8,58 @@ import './fonts/fonts.css'
 
 function AppShell() {
   const [collapsed, setCollapsed]   = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [isMobile, setIsMobile]     = useState(() => window.innerWidth <= 768)
   const [settings,  setSettings]    = useState(() => getSettings())
   const navigate = useNavigate()
 
   useEffect(() => { initSettings() }, [])
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  // On mobile the sidebar is never "collapsed" — it's a drawer that's open or shut
+  const showFull = !collapsed || isMobile
 
   function updateSettings(partial) {
     const next = saveSettings(partial)
     setSettings(next)
   }
 
+  function closeDrawer() { setDrawerOpen(false) }
+
+  function navTo(path) {
+    navigate(path)
+    closeDrawer()
+  }
+
   return (
-    <div className={`layout${collapsed ? ' sb-collapsed' : ''}`}>
+    <div className={`layout${collapsed ? ' sb-collapsed' : ''}${drawerOpen ? ' sb-open' : ''}`}>
+
+      {/* ── MOBILE HEADER ── */}
+      <div className="mobile-header">
+        <button
+          className="hamburger-btn"
+          onClick={() => setDrawerOpen(d => !d)}
+          aria-label="Open menu"
+        >
+          ☰
+        </button>
+        <div className="logo">add<span>app</span></div>
+      </div>
+
+      {/* ── DRAWER BACKDROP ── */}
+      {drawerOpen && <div className="drawer-backdrop" onClick={closeDrawer} />}
 
       {/* ── SIDEBAR ── */}
       <nav className="sidebar">
 
         {/* Logo + collapse */}
         <div className="sb-head">
-          {!collapsed && <div className="logo">add<span>app</span></div>}
+          {showFull && <div className="logo">add<span>app</span></div>}
           <button
             className="sb-toggle"
             onClick={() => setCollapsed(c => !c)}
@@ -38,22 +71,27 @@ function AppShell() {
 
         {/* Nav links */}
         <div className="nav-links">
-          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
-            title={collapsed ? 'Routines' : undefined}>
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Routines' : undefined}
+            onClick={closeDrawer}
+          >
             <span className="nav-icon">⚡</span>
-            {!collapsed && <span>Routines</span>}
+            {showFull && <span>Routines</span>}
           </NavLink>
 
           {[
-            { icon: '✅', label: 'Tasks'        },
-            { icon: '📅', label: 'Calendar'     },
-            { icon: '💚', label: 'Health'       },
-            { icon: '📓', label: 'Journal'      },
-            { icon: '🎯', label: 'Focus Session' },
+            { icon: '✅', label: 'Tasks'         },
+            { icon: '📅', label: 'Calendar'      },
+            { icon: '💚', label: 'Health'        },
+            { icon: '📓', label: 'Journal'       },
+            { icon: '🎯', label: 'Focus Session'  },
           ].map(item => (
-            <div key={item.label} className="nav-item disabled" title={collapsed ? item.label : undefined}>
+            <div key={item.label} className="nav-item disabled" title={!showFull ? item.label : undefined}>
               <span className="nav-icon">{item.icon}</span>
-              {!collapsed && (
+              {showFull && (
                 <>
                   <span>{item.label}</span>
                   <span className="soon">soon</span>
@@ -67,19 +105,19 @@ function AppShell() {
         <div className="sb-action-btns">
           <button
             className="sb-action-btn"
-            onClick={() => navigate('/account')}
-            title={collapsed ? 'Account' : undefined}
+            onClick={() => navTo('/account')}
+            title={!showFull ? 'Account' : undefined}
           >
             <span className="nav-icon">👤</span>
-            {!collapsed && <span>Account</span>}
+            {showFull && <span>Account</span>}
           </button>
           <button
             className="sb-action-btn"
-            onClick={() => navigate('/settings')}
-            title={collapsed ? 'Settings' : undefined}
+            onClick={() => navTo('/settings')}
+            title={!showFull ? 'Settings' : undefined}
           >
             <span className="nav-icon">⚙</span>
-            {!collapsed && <span>Settings</span>}
+            {showFull && <span>Settings</span>}
           </button>
         </div>
 
@@ -88,7 +126,7 @@ function AppShell() {
           <div className="xp-block">
             <div className="xp-top">
               <span className="xp-label">LVL 1</span>
-              {!collapsed && <span className="xp-pts">0 XP</span>}
+              {showFull && <span className="xp-pts">0 XP</span>}
             </div>
             <div className="xp-track">
               <div className="xp-fill" style={{ width: '0%' }} />
