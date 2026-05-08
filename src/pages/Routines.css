@@ -198,6 +198,7 @@
   .routines-page { padding: 1.25rem; }
   .routine-grid { grid-template-columns: 1fr; }
   .page-title { font-size: 22px; }
+  .page-sub { display: none; }
   .runner { max-width: 100%; }
   .step-actions { grid-template-columns: 1fr 1fr; }
   .step-actions .act-done { grid-column: 1 / -1; }
