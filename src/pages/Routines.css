@@ -209,3 +209,9 @@
 .up-reorder-btn { background: none; border: 1px solid var(--border); border-radius: 3px; color: var(--text3); cursor: pointer; font-size: 7px; padding: 2px 4px; line-height: 1; transition: color 0.15s, border-color 0.15s; }
 .up-reorder-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .up-reorder-btn:disabled { opacity: 0.2; cursor: default; }
+
+/* ── Drag and drop ──────────────────────────────────────── */
+.upcoming-item[draggable] { cursor: grab; }
+.upcoming-item[draggable]:active { cursor: grabbing; }
+.up-dragging { opacity: 0.35; }
+.up-drag-over { border-color: var(--accent) !important; background: var(--accent-glow, rgba(99,179,237,0.06)) !important; }
