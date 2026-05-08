@@ -412,6 +412,7 @@ export default function Routines() {
   const [routines, setRoutines] = useState(SAMPLE_ROUTINES)
   const [modal, setModal] = useState(null) // null | 'new' | routine obj
   const [running, setRunning] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // null | routine obj
   const nextId = useRef(10)
 
   function saveRoutine(data) {
@@ -475,7 +476,7 @@ export default function Routines() {
               <div className="rc-actions">
                 <button className="btn-primary btn-sm" onClick={() => setRunning(r)}>Start</button>
                 <button className="btn-ghost btn-sm" onClick={() => setModal(r)}>Edit</button>
-                <button className="btn-danger btn-sm" onClick={() => deleteRoutine(r.id)}>Delete</button>
+                <button className="btn-danger btn-sm" onClick={() => setDeleteConfirm(r)}>Delete</button>
               </div>
             </div>
           ))}
@@ -488,6 +489,26 @@ export default function Routines() {
           onSave={saveRoutine}
           onClose={() => setModal(null)}
         />
+      )}
+
+      {deleteConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+          <div className="modal" style={{maxWidth: 400}} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Delete routine</h2>
+              <button className="modal-close" onClick={() => setDeleteConfirm(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize: 14, color: 'var(--text2)', lineHeight: 1.6}}>
+                Are you sure you want to delete <strong style={{color: 'var(--text)'}}>"{deleteConfirm.name}"</strong> routine? This can't be undone.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="btn-danger" onClick={() => { deleteRoutine(deleteConfirm.id); setDeleteConfirm(null) }}>Delete</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -18,8 +18,8 @@
 }
 .btn-ghost:hover { border-color: var(--border2); color: var(--text); }
 .btn-ghost-sm { padding: 6px 12px; background: transparent; color: var(--text2); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; }
-.btn-danger { padding: 10px 16px; background: transparent; color: var(--text3); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; cursor: pointer; transition: all 0.15s; }
-.btn-danger:hover { border-color: var(--red); color: var(--red); }
+.btn-danger { padding: 10px 16px; background: transparent; color: var(--red); border: 1px solid var(--red); border-radius: var(--radius-sm); font-size: 14px; cursor: pointer; transition: all 0.15s; }
+.btn-danger:hover { background: var(--red-bg); }
 .btn-sm { padding: 7px 14px; font-size: 13px; }
 
 /* GRID */
@@ -191,3 +191,14 @@
 /* PAUSE BUTTON */
 .pause-timer-btn { width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
 .pause-timer-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ─── MOBILE ≤ 768px ─────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .routines-page { padding: 1.25rem; }
+  .routine-grid { grid-template-columns: 1fr; }
+  .page-title { font-size: 22px; }
+  .runner { max-width: 100%; }
+  .step-actions { grid-template-columns: 1fr 1fr; }
+  .step-actions .act-done { grid-column: 1 / -1; }
+}
