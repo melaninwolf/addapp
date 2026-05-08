@@ -320,6 +320,17 @@ function RoutineRunner({ routine, onFinish }) {
     }
   }
 
+
+  function moveStep(fromIdx, toIdx) {
+    setQueue(q => {
+      const newQ = [...q]
+      const temp = newQ[fromIdx]
+      newQ[fromIdx] = newQ[toIdx]
+      newQ[toIdx] = temp
+      return newQ
+    })
+  }
+
   if (finished) {
     const xp = doneCount * 10
     const totalTarget = stepLog.reduce((a, s) => a + s.target, 0)
@@ -412,14 +423,21 @@ function RoutineRunner({ routine, onFinish }) {
       {upcoming.length > 0 && (
         <div className="upcoming">
           <div className="upcoming-label">Up next</div>
-          {upcoming.map((s, i) => (
-            <div key={s.id + '-' + i} className={`upcoming-item ${s.deferred ? 'up-deferred' : ''}`}>
-              <span className="up-n">{stepIdx + 2 + i}</span>
-              <span className="up-name">{s.name}</span>
-              {s.deferred && <span className="up-tag">deferred</span>}
-              <span className="up-dur">{s.dur}m</span>
-            </div>
-          ))}
+          {upcoming.map((s, i) => {
+            const qIdx = stepIdx + 1 + i
+            return (
+              <div key={s.id + '-' + i} className={`upcoming-item ${s.deferred ? 'up-deferred' : ''}`}>
+                <span className="up-n">{stepIdx + 2 + i}</span>
+                <span className="up-name">{s.name}</span>
+                {s.deferred && <span className="up-tag">deferred</span>}
+                <span className="up-dur">{s.dur}m</span>
+                <div className="up-reorder">
+                  <button className="up-reorder-btn" onClick={() => moveStep(qIdx, qIdx - 1)} disabled={i === 0} title="Move up">▲</button>
+                  <button className="up-reorder-btn" onClick={() => moveStep(qIdx, qIdx + 1)} disabled={i === upcoming.length - 1} title="Move down">▼</button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
