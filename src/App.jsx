@@ -18,8 +18,6 @@ function AppShell() {
     setSettings(next)
   }
 
-  const { mode } = settings
-
   return (
     <div className={`layout${collapsed ? ' sb-collapsed' : ''}`}>
 
@@ -85,9 +83,8 @@ function AppShell() {
           </button>
         </div>
 
-        {/* Sidebar footer: XP + mode strip */}
+        {/* Sidebar footer: XP bar */}
         <div className="sidebar-footer">
-
           <div className="xp-block">
             <div className="xp-top">
               <span className="xp-label">LVL 1</span>
@@ -97,26 +94,6 @@ function AppShell() {
               <div className="xp-fill" style={{ width: '0%' }} />
             </div>
           </div>
-
-          {/* Quick mode toggle */}
-          <div className="mode-strip">
-            {[
-              { id: 'ocean', icon: '🌊', label: 'Ocean' },
-              { id: 'light', icon: '☀',  label: 'Light' },
-              { id: 'dark',  icon: '🌙', label: 'Dark'  },
-            ].map(m => (
-              <button
-                key={m.id}
-                className={`mode-pill${mode === m.id ? ' active' : ''}`}
-                onClick={() => updateSettings({ mode: m.id })}
-                title={collapsed ? m.label : undefined}
-              >
-                <span>{m.icon}</span>
-                {!collapsed && <span>{m.label}</span>}
-              </button>
-            ))}
-          </div>
-
         </div>
       </nav>
 

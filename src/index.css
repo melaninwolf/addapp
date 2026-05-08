@@ -1,6 +1,6 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ── OCEAN CALM (default) ─────────────────────────────────── */
 /* Accent is fixed — settings.js does NOT override --accent    */
