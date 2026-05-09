@@ -2,15 +2,20 @@ import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router
 import { useState, useEffect } from 'react'
 import Routines from './pages/Routines.jsx'
 import Settings from './pages/Settings.jsx'
+import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
+import { getXP, getLevel, getLevelProgress, getXPIntoLevel } from './xp'
+import { supabase } from './supabase'
+import { syncXPFromDb } from './xp'
 import './App.css'
 import './fonts/fonts.css'
 
-function AppShell() {
+function AppShell({ user }) {
   const [collapsed, setCollapsed]   = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isMobile, setIsMobile]     = useState(() => window.innerWidth <= 768)
   const [settings,  setSettings]    = useState(() => getSettings())
+  const [xp,        setXp]          = useState(() => getXP())
   const navigate = useNavigate()
 
   useEffect(() => { initSettings() }, [])
@@ -21,7 +26,12 @@ function AppShell() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  // On mobile the sidebar is never "collapsed" — it's a drawer that's open or shut
+  useEffect(() => {
+    const handler = () => setXp(getXP())
+    window.addEventListener('xp-update', handler)
+    return () => window.removeEventListener('xp-update', handler)
+  }, [])
+
   const showFull = !collapsed || isMobile
 
   function updateSettings(partial) {
@@ -36,6 +46,10 @@ function AppShell() {
     closeDrawer()
   }
 
+  async function handleSignOut() {
+    await supabase.auth.signOut()
+  }
+
   return (
     <div className={`layout${collapsed ? ' sb-collapsed' : ''}${drawerOpen ? ' sb-open' : ''}`}>
 
@@ -45,9 +59,7 @@ function AppShell() {
           className="hamburger-btn"
           onClick={() => setDrawerOpen(d => !d)}
           aria-label="Open menu"
-        >
-          ☰
-        </button>
+        >☰</button>
         <div className="logo">add<span>app</span></div>
       </div>
 
@@ -57,7 +69,6 @@ function AppShell() {
       {/* ── SIDEBAR ── */}
       <nav className="sidebar">
 
-        {/* Logo + collapse */}
         <div className="sb-head">
           {showFull && <div className="logo">add<span>app</span></div>}
           <button
@@ -69,7 +80,6 @@ function AppShell() {
           </button>
         </div>
 
-        {/* Nav links */}
         <div className="nav-links">
           <NavLink
             to="/"
@@ -101,7 +111,6 @@ function AppShell() {
           ))}
         </div>
 
-        {/* Account + Settings */}
         <div className="sb-action-btns">
           <button
             className="sb-action-btn"
@@ -125,11 +134,11 @@ function AppShell() {
         <div className="sidebar-footer">
           <div className="xp-block">
             <div className="xp-top">
-              <span className="xp-label">LVL 1</span>
-              {showFull && <span className="xp-pts">0 XP</span>}
+              <span className="xp-label">LVL {getLevel(xp)}</span>
+              {showFull && <span className="xp-pts">{getXPIntoLevel(xp)} / 100 XP</span>}
             </div>
             <div className="xp-track">
-              <div className="xp-fill" style={{ width: '0%' }} />
+              <div className="xp-fill" style={{ width: getLevelProgress(xp) + '%' }} />
             </div>
           </div>
         </div>
@@ -138,7 +147,7 @@ function AppShell() {
       {/* ── MAIN ── */}
       <main className="main">
         <Routes>
-          <Route path="/"        element={<Routines />} />
+          <Route path="/"        element={<Routines userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings
               settings={settings}
@@ -150,7 +159,8 @@ function AppShell() {
             <div className="placeholder-page">
               <button className="back-btn" onClick={() => navigate('/')}>← Back</button>
               <h1>Account</h1>
-              <p>Sign-in and profile settings coming in Phase 8 — Supabase auth.</p>
+              <p style={{color:'var(--text2)', fontSize:14, marginBottom:'1.5rem'}}>{user?.email}</p>
+              <button className="btn-danger btn-sm" onClick={handleSignOut}>Sign out</button>
             </div>
           } />
         </Routes>
@@ -161,9 +171,48 @@ function AppShell() {
 }
 
 export default function App() {
+  const [user, setUser]           = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+
+  useEffect(() => {
+    // Check existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setAuthLoading(false)
+    })
+
+    // Listen for auth changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null)
+      if (event === 'SIGNED_IN') syncXPFromDb()
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--bg)', color: 'var(--text3)',
+        fontSize: 14
+      }}>
+        Loading…
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <BrowserRouter>
+        <Auth />
+      </BrowserRouter>
+    )
+  }
+
   return (
     <BrowserRouter>
-      <AppShell />
+      <AppShell user={user} />
     </BrowserRouter>
   )
 }

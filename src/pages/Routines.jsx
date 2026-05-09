@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { addXP } from '../xp'
+import { supabase } from '../supabase'
 import './Routines.css'
 
 const SAMPLE_ROUTINES = [
   {
-    id: 1, name: 'Morning Routine', time: '07:00', emoji: '🌅', days: ['mon','tue','wed','thu','fri','sat','sun'],
+    id: 1, type: 'routine', name: 'Morning Routine', time: '07:00', emoji: '🌅', days: ['mon','tue','wed','thu','fri','sat','sun'],
     steps: [
       { id: 1, name: 'Drink a glass of water', dur: 2 },
       { id: 2, name: 'Take medication', dur: 1 },
@@ -13,7 +16,7 @@ const SAMPLE_ROUTINES = [
     ]
   },
   {
-    id: 2, name: 'Night Routine', time: '21:30', emoji: '🌙', days: ['mon','tue','wed','thu','fri','sat','sun'],
+    id: 2, type: 'routine', name: 'Night Routine', time: '21:30', emoji: '🌙', days: ['mon','tue','wed','thu','fri','sat','sun'],
     steps: [
       { id: 1, name: 'Put phone away', dur: 1 },
       { id: 2, name: 'Journal — 3 wins today', dur: 5 },
@@ -21,10 +24,29 @@ const SAMPLE_ROUTINES = [
       { id: 4, name: 'Read (no screens)', dur: 20 },
       { id: 5, name: 'Lights out', dur: 1 },
     ]
+  },
+  {
+    id: 3, type: 'routine', name: 'Test Routine', time: '12:00', emoji: '✅', days: ['mon','tue','wed','thu','fri','sat','sun'],
+    steps: [
+      { id: 1, name: 'Test step one', dur: 1 },
+      { id: 2, name: 'Test step two', dur: 1 },
+      { id: 3, name: 'Test step three', dur: 1 },
+    ]
+  },
+  {
+    id: 4, type: 'trigger', name: 'Test Trigger', time: null, emoji: '🕹️', days: [],
+    steps: [
+      { id: 1, name: 'Test trigger step one', dur: 1 },
+      { id: 2, name: 'Test trigger step two', dur: 1 },
+      { id: 3, name: 'Test trigger step three', dur: 1 },
+      { id: 4, name: 'Test trigger step four', dur: 1 },
+      { id: 5, name: 'Test trigger step five', dur: 1 },
+    ]
   }
 ]
 
 function fmtTime(t) {
+  if (!t) return 'Flexible'
   const [h, m] = t.split(':')
   const hh = parseInt(h)
   return `${hh % 12 || 12}:${m} ${hh >= 12 ? 'PM' : 'AM'}`
@@ -35,7 +57,7 @@ const ALL_DAYS = ['mon','tue','wed','thu','fri','sat','sun']
 const DAY_LABELS = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' }
 
 function fmtDays(days) {
-  if (!days || days.length === 0) return 'No days'
+  if (!days || days.length === 0) return 'Flexible'
   if (days.length === 7) return 'Every day'
   if (days.length === 5 && !days.includes('sat') && !days.includes('sun')) return 'Weekdays'
   if (days.length === 2 && days.includes('sat') && days.includes('sun')) return 'Weekends'
@@ -58,11 +80,15 @@ function RoutineModal({ routine, onSave, onClose }) {
   const [time, setTime] = useState(routine?.time || '07:00')
   const [emoji, setEmoji] = useState(routine?.emoji || '⚡')
   const [days, setDays] = useState(routine?.days || ['mon','tue','wed','thu','fri','sat','sun'])
+  const [type, setType] = useState(routine?.type || 'routine')
+  const [hasTime, setHasTime] = useState(!!routine?.time)
+  const [hasDays, setHasDays] = useState(!!(routine?.days?.length))
   const [steps, setSteps] = useState(
     routine?.steps.map(s => ({ ...s })) || [{ id: Date.now(), name: '', dur: 5 }]
   )
 
   function addStep() {
+    if (type === 'trigger' && steps.length >= 5) return
     setSteps(s => [...s, { id: Date.now(), name: '', dur: 5 }])
   }
   function removeStep(id) {
@@ -74,7 +100,7 @@ function RoutineModal({ routine, onSave, onClose }) {
 
   function save() {
     if (!name.trim() || steps.filter(s => s.name.trim()).length === 0) return
-    onSave({ name: name.trim(), time, days, emoji, steps: steps.filter(s => s.name.trim()) })
+    onSave({ name: name.trim(), time: hasTime ? time : null, days: hasDays ? days : [], emoji, type, steps: steps.filter(s => s.name.trim()) })
   }
 
   return (
@@ -95,30 +121,60 @@ function RoutineModal({ routine, onSave, onClose }) {
               <label>Routine name</label>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Morning routine" />
             </div>
-            <div className="field" style={{width:120}}>
-              <label>Start time</label>
-              <input type="time" value={time} onChange={e => setTime(e.target.value)} />
+            <div className="field" style={{width:140}}>
+              <label>
+                <input type="checkbox" checked={hasTime} onChange={e => setHasTime(e.target.checked)} style={{marginRight:6}} />
+                Start time
+              </label>
+              {hasTime
+                ? <input type="time" value={time} onChange={e => setTime(e.target.value)} />
+                : <div className="flexible-badge">Flexible</div>
+              }
             </div>
+          </div>
+
+          <div className="field" style={{marginBottom:'1rem'}}>
+            <label>Type</label>
+            <div className="type-toggle">
+              <button
+                type="button"
+                className={`type-btn ${type === 'routine' ? 'active' : ''}`}
+                onClick={() => setType('routine')}
+              >📋 Routine</button>
+              <button
+                type="button"
+                className={`type-btn ${type === 'trigger' ? 'active' : ''}`}
+                onClick={() => setType('trigger')}
+              >🕹️ Trigger</button>
+            </div>
+            {type === 'trigger' && (
+              <p className="type-hint">Max 5 steps. Launches a Focus Session when complete.</p>
+            )}
           </div>
 
           <div className="field" style={{marginBottom:'1rem'}}>
             <label>Repeat on</label>
             <div className="day-quick-row">
+              <button type="button"
+                className={`day-quick ${!hasDays ? 'active' : ''}`}
+                onClick={() => setHasDays(false)}>flexible</button>
               {[['everyday',['mon','tue','wed','thu','fri','sat','sun']],['weekdays',['mon','tue','wed','thu','fri']],['weekends',['sat','sun']]].map(([label, val]) => (
                 <button key={label} type="button"
-                  className={`day-quick ${JSON.stringify(days.sort()) === JSON.stringify([...val].sort()) ? 'active' : ''}`}
-                  onClick={() => setDays(val)}>{label}</button>
+                  className={`day-quick ${hasDays && JSON.stringify(days.sort()) === JSON.stringify([...val].sort()) ? 'active' : ''}`}
+                  onClick={() => { setHasDays(true); setDays(val) }}>{label}</button>
               ))}
             </div>
-            <div className="day-picker">
-              {ALL_DAYS.map(d => (
-                <button key={d} type="button"
-                  className={`day-btn ${days.includes(d) ? 'active' : ''}`}
-                  onClick={() => setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])}>
-                  {DAY_LABELS[d]}
-                </button>
-              ))}
-            </div>
+            {hasDays && (
+              <div className="day-picker">
+                {ALL_DAYS.map(d => (
+                  <button key={d} type="button"
+                    className={`day-btn ${days.includes(d) ? 'active' : ''}`}
+                    onClick={() => setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])}>
+                    {DAY_LABELS[d]}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="steps-section">
@@ -143,7 +199,10 @@ function RoutineModal({ routine, onSave, onClose }) {
                 <button className="step-remove" onClick={() => removeStep(s.id)}>×</button>
               </div>
             ))}
-            <button className="add-step-btn" onClick={addStep}>+ Add step</button>
+            {type === 'trigger' && steps.length >= 5
+              ? <p className="type-hint" style={{marginTop:'0.5rem'}}>Max 5 steps reached for triggers.</p>
+              : <button className="add-step-btn" onClick={addStep}>+ Add step</button>
+            }
           </div>
         </div>
 
@@ -157,7 +216,7 @@ function RoutineModal({ routine, onSave, onClose }) {
 }
 
 // ─── RUNNER ──────────────────────────────────────────────────────────────────
-function RoutineRunner({ routine, onFinish }) {
+function RoutineRunner({ routine, onFinish, onStartFocus }) {
   const [queue, setQueue] = useState(routine.steps.map(s => ({ ...s, deferred: false })))
   const [deferred, setDeferred] = useState([])
   const [stepIdx, setStepIdx] = useState(0)
@@ -198,6 +257,21 @@ function RoutineRunner({ routine, onFinish }) {
   useEffect(() => {
     if (elapsed === totalSecs && step && totalSecs > 0) {
       showToast(`Time's up for "${step.name}" — mark done, skip, or do later!`)
+      playSound('step')
+      const nextStep = queue[stepIdx + 1]
+      if (nextStep) {
+        fireStepNotif(step.name, nextStep.name)
+      } else {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification(`${step.name} is done`, {
+              body: 'Last step — mark done to finish your routine!',
+              tag: 'addapp-step',
+              renotify: true,
+            })
+          } catch(e) {}
+        }
+      }
     }
   }, [elapsed])
 
@@ -275,7 +349,9 @@ function RoutineRunner({ routine, onFinish }) {
       setSkipped(newSkipped)
       setFinished(true)
       playSound('finish')
-      fireNotif(newDoneCount * 10)
+      const xpEarned = newDoneCount * (routine.type === 'trigger' ? 3 : 5)
+      addXP(xpEarned)
+      fireNotif(xpEarned)
     } else {
       setStepLog(newLog)
       setQueue(newQueue)
@@ -314,7 +390,9 @@ function RoutineRunner({ routine, onFinish }) {
       setQueue(newQueue)
       setDeferred(newDeferred)
       setFinished(true)
-      fireNotif(doneCount * 10)
+      const xpEarnedLater = doneCount * (routine.type === 'trigger' ? 3 : 5)
+      addXP(xpEarnedLater)
+      fireNotif(xpEarnedLater)
     } else {
       setQueue(newQueue)
       setDeferred(newDeferred)
@@ -343,7 +421,8 @@ function RoutineRunner({ routine, onFinish }) {
   }
 
   if (finished) {
-    const xp = doneCount * 10
+    const xpPerStep = routine.type === 'trigger' ? 3 : 5
+    const xp = doneCount * xpPerStep
     const totalTarget = stepLog.reduce((a, s) => a + s.target, 0)
     const totalActual = stepLog.reduce((a, s) => a + s.actual, 0)
     const allPerfect = doneCount === routine.steps.length
@@ -394,7 +473,16 @@ function RoutineRunner({ routine, onFinish }) {
             )
           })}
         </div>
-        <button className="btn-primary" style={{marginTop:'1.5rem'}} onClick={onFinish}>Back to routines</button>
+        {routine.type === 'trigger' ? (
+          <div className="trigger-complete-actions">
+            <button className="btn-primary trigger-launch-btn" onClick={onStartFocus}>
+              🕹️ Start Focus Session
+            </button>
+            <button className="btn-ghost" onClick={onFinish}>Skip for now</button>
+          </div>
+        ) : (
+          <button className="btn-primary" style={{marginTop:'1.5rem'}} onClick={onFinish}>Back to routines</button>
+        )}
       </div>
     )
   }
@@ -407,6 +495,37 @@ function RoutineRunner({ routine, onFinish }) {
         <button className="btn-ghost-sm" onClick={onFinish}>← Exit</button>
         <div className="runner-title">{routine.emoji} {routine.name}</div>
         <div className="runner-prog">{stepIdx + 1} / {queue.length}</div>
+      </div>
+
+      {/* TEMP: test notification button — remove before shipping */}
+      <div style={{textAlign:'center', marginBottom:'0.75rem'}}>
+        <button
+          className="btn-ghost-sm"
+          onClick={() => {
+            playSound('step')
+            const nextStep = queue[stepIdx + 1]
+            if ('Notification' in window) {
+              if (Notification.permission === 'granted') {
+                try {
+                  new Notification('Test: Step done', {
+                    body: nextStep ? `Next: ${nextStep.name}` : 'Last step!',
+                    tag: 'addapp-test',
+                    renotify: true,
+                  })
+                  showToast('Test notification sent!')
+                } catch(e) { showToast('Notification failed: ' + e.message) }
+              } else if (Notification.permission === 'default') {
+                Notification.requestPermission().then(p => {
+                  showToast(p === 'granted' ? 'Permission granted! Try again.' : 'Notifications blocked.')
+                })
+              } else {
+                showToast('Notifications are blocked. Enable in browser settings.')
+              }
+            } else {
+              showToast('Notifications not supported in this browser.')
+            }
+          }}
+        >🔔 Test notification</button>
       </div>
 
       <div className={`step-card ${isDeferred ? 'deferred' : ''} ${isOverTime ? 'overtime' : ''}`}>
@@ -464,28 +583,59 @@ function RoutineRunner({ routine, onFinish }) {
 }
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
-export default function Routines() {
+export default function Routines({ userId }) {
+  const navigate = useNavigate()
   const [routines, setRoutines] = useState(SAMPLE_ROUTINES)
+  const [dbLoading, setDbLoading] = useState(false)
   const [modal, setModal] = useState(null) // null | 'new' | routine obj
   const [running, setRunning] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // null | routine obj
-  const nextId = useRef(10)
 
-  function saveRoutine(data) {
+  // Load routines from Supabase on mount
+  useEffect(() => {
+    if (!userId) return
+    setDbLoading(true)
+    supabase
+      .from('routines')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (!error && data) setRoutines(data.length > 0 ? data : SAMPLE_ROUTINES)
+        setDbLoading(false)
+      })
+  }, [userId])
+
+  async function saveRoutine(data) {
     if (modal?.id) {
-      setRoutines(r => r.map(x => x.id === modal.id ? { ...x, ...data } : x))
+      // Update existing
+      const { error } = await supabase
+        .from('routines')
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq('id', modal.id)
+      if (!error) setRoutines(r => r.map(x => x.id === modal.id ? { ...x, ...data } : x))
     } else {
-      setRoutines(r => [...r, { id: nextId.current++, ...data }])
+      // Create new
+      const { data: created, error } = await supabase
+        .from('routines')
+        .insert({ ...data, user_id: userId })
+        .select()
+        .single()
+      if (!error && created) setRoutines(r => [...r, created])
     }
     setModal(null)
   }
 
-  function deleteRoutine(id) {
+  async function deleteRoutine(id) {
+    await supabase.from('routines').delete().eq('id', id)
     setRoutines(r => r.filter(x => x.id !== id))
   }
 
   if (running) {
-    return <RoutineRunner routine={running} onFinish={() => setRunning(null)} />
+    return <RoutineRunner
+      routine={running}
+      onFinish={() => setRunning(null)}
+      onStartFocus={() => { setRunning(null); navigate('/focus') }}
+    />
   }
 
   return (
@@ -505,39 +655,58 @@ export default function Routines() {
           <p>Create your first routine to get started</p>
           <button className="btn-primary" onClick={() => setModal('new')}>Create routine</button>
         </div>
-      ) : (
-        <div className="routine-grid">
-          {routines.map(r => (
-            <div key={r.id} className="routine-card">
-              <div className="rc-top">
-                <div className="rc-emoji">{r.emoji}</div>
-                <div className="rc-info">
+      ) : (() => {
+        const regularList = routines.filter(r => r.type !== 'trigger')
+        const triggerList = routines.filter(r => r.type === 'trigger')
+        const renderCard = r => (
+          <div key={r.id} className="routine-card">
+            <div className="rc-top">
+              <div className="rc-emoji">{r.emoji}</div>
+              <div className="rc-info">
+                <div className="rc-name-row">
                   <div className="rc-name">{r.name}</div>
-                  <div className="rc-meta">{fmtTime(r.time)} &middot; {fmtDays(r.days)}</div>
-                  <div className="rc-meta">{r.steps.length} steps &middot; {totalMins(r.steps)} min</div>
+                  {r.type === 'trigger' && <span className="rc-trigger-badge">🕹️ Trigger</span>}
                 </div>
-              </div>
-              <div className="rc-steps">
-                {r.steps.slice(0, 4).map((s, i) => (
-                  <div key={i} className="rc-step-row">
-                    <span className="rc-step-dot" />
-                    <span className="rc-step-name">{s.name}</span>
-                    <span className="rc-step-dur">{s.dur}m</span>
-                  </div>
-                ))}
-                {r.steps.length > 4 && (
-                  <div className="rc-more">+{r.steps.length - 4} more steps</div>
-                )}
-              </div>
-              <div className="rc-actions">
-                <button className="btn-primary btn-sm" onClick={() => setRunning(r)}>Start</button>
-                <button className="btn-ghost btn-sm" onClick={() => setModal(r)}>Edit</button>
-                <button className="btn-danger btn-sm" onClick={() => setDeleteConfirm(r)}>Delete</button>
+                <div className="rc-meta">{fmtTime(r.time)} &middot; {fmtDays(r.days)}</div>
+                <div className="rc-meta">{r.steps.length} steps &middot; {totalMins(r.steps)} min</div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="rc-steps">
+              {r.steps.slice(0, 4).map((s, i) => (
+                <div key={i} className="rc-step-row">
+                  <span className="rc-step-dot" />
+                  <span className="rc-step-name">{s.name}</span>
+                  <span className="rc-step-dur">{s.dur}m</span>
+                </div>
+              ))}
+              {r.steps.length > 4 && (
+                <div className="rc-more">+{r.steps.length - 4} more steps</div>
+              )}
+            </div>
+            <div className="rc-actions">
+              <button className="btn-primary btn-sm" onClick={() => setRunning(r)}>Start</button>
+              <button className="btn-ghost btn-sm" onClick={() => setModal(r)}>Edit</button>
+              <button className="btn-danger btn-sm" onClick={() => setDeleteConfirm(r)}>Delete</button>
+            </div>
+          </div>
+        )
+        return (
+          <>
+            {regularList.length > 0 && (
+              <>
+                <div className="section-label">Routines</div>
+                <div className="routine-grid">{regularList.map(renderCard)}</div>
+              </>
+            )}
+            {triggerList.length > 0 && (
+              <>
+                <div className="section-label section-label-trigger">🕹️ Triggers</div>
+                <div className="routine-grid">{triggerList.map(renderCard)}</div>
+              </>
+            )}
+          </>
+        )
+      })()}
 
       {modal && (
         <RoutineModal
