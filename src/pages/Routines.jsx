@@ -585,22 +585,23 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function Routines({ userId }) {
   const navigate = useNavigate()
-  const [routines, setRoutines] = useState(SAMPLE_ROUTINES)
-  const [dbLoading, setDbLoading] = useState(false)
+  const [routines, setRoutines] = useState([])
+  const [dbLoading, setDbLoading] = useState(!!userId)
   const [modal, setModal] = useState(null) // null | 'new' | routine obj
   const [running, setRunning] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // null | routine obj
 
   // Load routines from Supabase on mount
   useEffect(() => {
-    if (!userId) return
+    if (!userId) { setRoutines(SAMPLE_ROUTINES); return }
     setDbLoading(true)
     supabase
       .from('routines')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
-        if (!error && data) setRoutines(data.length > 0 ? data : SAMPLE_ROUTINES)
+        if (!error) setRoutines(data || [])
         setDbLoading(false)
       })
   }, [userId])
@@ -636,6 +637,14 @@ export default function Routines({ userId }) {
       onFinish={() => setRunning(null)}
       onStartFocus={() => { setRunning(null); navigate('/focus') }}
     />
+  }
+
+  if (dbLoading) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60vh', color:'var(--text3)', fontSize:14 }}>
+        Loading routines…
+      </div>
+    )
   }
 
   return (
