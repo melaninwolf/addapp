@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
+import { loadGIS, requestToken, revokeToken, fetchEvents, eventStartDate, eventTimeLabel } from '../googleCalendar'
 import './Calendar.css'
 
 const SAMPLE_ROUTINES = [
@@ -69,7 +70,11 @@ function weekRangeLabel(days) {
   return `${MONTH_ABR[a.getMonth()]} ${a.getDate()} – ${MONTH_ABR[b.getMonth()]} ${b.getDate()}, ${b.getFullYear()}`
 }
 
-// ─── Shared nav bar ───────────────────────────────────────────
+function isSameDay(a, b) {
+  return a.toDateString() === b.toDateString()
+}
+
+// ─── Shared nav ──────────────────────────────────────────────
 function CalNav({ onPrev, onNext, label }) {
   return (
     <div className="cal-nav">
@@ -80,15 +85,14 @@ function CalNav({ onPrev, onNext, label }) {
   )
 }
 
-// ─── Day event card (shared by Week + Day views) ──────────────
-function EventCard({ r, showTime = false }) {
+// ─── Routine card (used in Week + Day views) ─────────────────
+function RoutineCard({ r }) {
   return (
-    <div className="event-card">
+    <div className="event-card routine-card-cal">
       <div className="ec-emoji">{r.emoji}</div>
       <div className="ec-body">
         <div className="ec-name">{r.name}</div>
         <div className="ec-meta">
-          {showTime && <span>{fmtTime(r.time)} · </span>}
           {r.steps?.length > 0 && <>{r.steps.length} steps · {totalMins(r.steps)} min</>}
         </div>
         {r.type === 'trigger' && <span className="ec-trigger-tag">🕹️ Trigger</span>}
@@ -97,8 +101,22 @@ function EventCard({ r, showTime = false }) {
   )
 }
 
+// ─── Google Calendar event card ──────────────────────────────
+function GCalEventCard({ event }) {
+  const timeLabel = eventTimeLabel(event)
+  return (
+    <div className="event-card gcal-card">
+      <div className="ec-emoji gcal-icon">📅</div>
+      <div className="ec-body">
+        <div className="ec-name">{event.summary || '(No title)'}</div>
+        <div className="ec-meta gcal-time">{timeLabel}</div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MONTH VIEW ───────────────────────────────────────────────
-function MonthView({ today, selected, setSelected, routinesForDate }) {
+function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
   const [year,  setYear]  = useState(selected.getFullYear())
   const [month, setMonth] = useState(selected.getMonth())
 
@@ -111,12 +129,12 @@ function MonthView({ today, selected, setSelected, routinesForDate }) {
     else setMonth(m => m + 1)
   }
 
-  const cells = getCalendarCells(year, month)
-  const selRout = routinesForDate(selected)
+  const cells    = getCalendarCells(year, month)
+  const selRout  = routinesForDate(selected)
+  const selGCal  = gcalEventsForDate(selected)
 
   return (
     <div className="cal-month-layout">
-
       <div className="cal-main">
         <CalNav onPrev={prev} onNext={next} label={`${MONTH_FULL[month]} ${year}`} />
 
@@ -124,9 +142,11 @@ function MonthView({ today, selected, setSelected, routinesForDate }) {
           {DOW_SHORT.map(d => <div key={d} className="cal-dow">{d}</div>)}
 
           {cells.map(({ date, current }, i) => {
-            const isToday    = date.toDateString() === today.toDateString()
-            const isSelected = date.toDateString() === selected.toDateString()
+            const isToday    = isSameDay(date, today)
+            const isSelected = isSameDay(date, selected)
             const dayRout    = routinesForDate(date)
+            const dayGCal    = gcalEventsForDate(date)
+            const totalItems = dayRout.length + dayGCal.length
             return (
               <div
                 key={i}
@@ -134,19 +154,23 @@ function MonthView({ today, selected, setSelected, routinesForDate }) {
                 onClick={() => setSelected(date)}
               >
                 <span className="cal-day-num">{date.getDate()}</span>
-                {dayRout.length > 0 && (
-                  <div className="cal-day-pills">
-                    {dayRout.slice(0, 2).map(r => (
-                      <div key={r.id} className="cal-pill">
-                        <span className="cal-pill-emoji">{r.emoji}</span>
-                        <span className="cal-pill-name">{r.name}</span>
-                      </div>
-                    ))}
-                    {dayRout.length > 2 && (
-                      <div className="cal-pill cal-pill-more">+{dayRout.length - 2} more</div>
-                    )}
-                  </div>
-                )}
+                <div className="cal-day-pills">
+                  {dayGCal.slice(0, 1).map(e => (
+                    <div key={e.id} className="cal-pill cal-pill-gcal">
+                      <span className="cal-pill-emoji">📅</span>
+                      <span className="cal-pill-name">{e.summary || '(No title)'}</span>
+                    </div>
+                  ))}
+                  {dayRout.slice(0, dayGCal.length > 0 ? 1 : 2).map(r => (
+                    <div key={r.id} className="cal-pill">
+                      <span className="cal-pill-emoji">{r.emoji}</span>
+                      <span className="cal-pill-name">{r.name}</span>
+                    </div>
+                  ))}
+                  {totalItems > 2 && (
+                    <div className="cal-pill cal-pill-more">+{totalItems - 2} more</div>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -157,17 +181,25 @@ function MonthView({ today, selected, setSelected, routinesForDate }) {
       <div className="cal-detail">
         <div className="cal-detail-date">
           {selected.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          {selected.toDateString() === today.toDateString() && (
-            <span className="cal-today-tag">Today</span>
-          )}
+          {isSameDay(selected, today) && <span className="cal-today-tag">Today</span>}
         </div>
-        {selRout.length === 0 ? (
+
+        {selRout.length === 0 && selGCal.length === 0 ? (
           <div className="cal-detail-empty">
             <span className="cal-empty-icon">🗓</span>
-            <span>No routines scheduled</span>
+            <span>Nothing scheduled</span>
           </div>
         ) : (
           <div className="cal-detail-list">
+            {selGCal.map(e => (
+              <div key={e.id} className="cal-detail-item gcal-detail-item">
+                <div className="cdi-emoji gcal-cdi-icon">📅</div>
+                <div className="cdi-info">
+                  <div className="cdi-name">{e.summary || '(No title)'}</div>
+                  <div className="cdi-meta gcal-time">{eventTimeLabel(e)}</div>
+                </div>
+              </div>
+            ))}
             {selRout.map(r => (
               <div key={r.id} className="cal-detail-item">
                 <div className="cdi-emoji">{r.emoji}</div>
@@ -184,22 +216,17 @@ function MonthView({ today, selected, setSelected, routinesForDate }) {
           </div>
         )}
       </div>
-
     </div>
   )
 }
 
 // ─── WEEK VIEW ────────────────────────────────────────────────
-function WeekView({ today, selected, setSelected, routinesForDate }) {
+function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
   const [anchor, setAnchor] = useState(() => new Date(selected))
   const weekDays = getWeekDays(anchor)
 
-  function prev() {
-    const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d)
-  }
-  function next() {
-    const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d)
-  }
+  function prev() { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d) }
+  function next() { const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d) }
 
   return (
     <div className="cal-week-layout">
@@ -207,9 +234,10 @@ function WeekView({ today, selected, setSelected, routinesForDate }) {
 
       <div className="week-grid">
         {weekDays.map((date, i) => {
-          const isToday    = date.toDateString() === today.toDateString()
-          const isSelected = date.toDateString() === selected.toDateString()
+          const isToday    = isSameDay(date, today)
+          const isSelected = isSameDay(date, selected)
           const dayRout    = routinesForDate(date)
+          const dayGCal    = gcalEventsForDate(date)
           return (
             <div
               key={i}
@@ -222,20 +250,26 @@ function WeekView({ today, selected, setSelected, routinesForDate }) {
                   {date.getDate()}
                 </span>
               </div>
-
               <div className="week-col-body">
-                {dayRout.length === 0
-                  ? <div className="week-no-rout" />
-                  : dayRout.map(r => (
-                    <div key={r.id} className="week-event">
-                      <span className="we-emoji">{r.emoji}</span>
-                      <div className="we-body">
-                        <div className="we-name">{r.name}</div>
-                        {r.time && <div className="we-time">{fmtTime(r.time)}</div>}
-                      </div>
+                {dayGCal.map(e => (
+                  <div key={e.id} className="week-event week-event-gcal">
+                    <span className="we-emoji">📅</span>
+                    <div className="we-body">
+                      <div className="we-name">{e.summary || '(No title)'}</div>
+                      <div className="we-time gcal-time">{eventTimeLabel(e)}</div>
                     </div>
-                  ))
-                }
+                  </div>
+                ))}
+                {dayRout.map(r => (
+                  <div key={r.id} className="week-event">
+                    <span className="we-emoji">{r.emoji}</span>
+                    <div className="we-body">
+                      <div className="we-name">{r.name}</div>
+                      {r.time && <div className="we-time">{fmtTime(r.time)}</div>}
+                    </div>
+                  </div>
+                ))}
+                {dayRout.length === 0 && dayGCal.length === 0 && <div className="week-no-rout" />}
               </div>
             </div>
           )
@@ -246,18 +280,31 @@ function WeekView({ today, selected, setSelected, routinesForDate }) {
 }
 
 // ─── DAY VIEW ─────────────────────────────────────────────────
-function DayView({ today, selected, setSelected, routinesForDate }) {
-  function prev() {
-    const d = new Date(selected); d.setDate(d.getDate() - 1); setSelected(d)
-  }
-  function next() {
-    const d = new Date(selected); d.setDate(d.getDate() + 1); setSelected(d)
-  }
+function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
+  function prev() { const d = new Date(selected); d.setDate(d.getDate() - 1); setSelected(d) }
+  function next() { const d = new Date(selected); d.setDate(d.getDate() + 1); setSelected(d) }
 
-  const isToday  = selected.toDateString() === today.toDateString()
+  const isToday  = isSameDay(selected, today)
   const dayRout  = routinesForDate(selected)
-  const timed    = dayRout.filter(r => r.time).sort((a, b) => a.time.localeCompare(b.time))
-  const flexible = dayRout.filter(r => !r.time)
+  const dayGCal  = gcalEventsForDate(selected)
+
+  // Sort all timed items together by time
+  const timedRout   = dayRout.filter(r => r.time)
+  const flexRout    = dayRout.filter(r => !r.time)
+  const timedGCal   = dayGCal.filter(e => e.start?.dateTime)
+  const alldayGCal  = dayGCal.filter(e => e.start?.date && !e.start?.dateTime)
+
+  // Merge timed routines + gcal events, sorted by time
+  const timedItems = [
+    ...timedRout.map(r => ({ type: 'routine', time: r.time, data: r })),
+    ...timedGCal.map(e => ({
+      type: 'gcal',
+      time: new Date(e.start.dateTime).toTimeString().slice(0, 5),
+      data: e,
+    })),
+  ].sort((a, b) => a.time.localeCompare(b.time))
+
+  const hasAnything = dayRout.length > 0 || dayGCal.length > 0
 
   const dateLabel = (
     <>
@@ -270,28 +317,45 @@ function DayView({ today, selected, setSelected, routinesForDate }) {
     <div className="cal-day-layout">
       <CalNav onPrev={prev} onNext={next} label={dateLabel} />
 
-      {dayRout.length === 0 ? (
+      {!hasAnything ? (
         <div className="day-empty">
           <span>🗓</span>
-          <span>No routines scheduled for this day</span>
+          <span>Nothing scheduled for this day</span>
         </div>
       ) : (
         <div className="day-timeline">
 
-          {flexible.length > 0 && (
+          {/* All-day Google Calendar events */}
+          {alldayGCal.length > 0 && (
             <div className="day-block">
-              <div className="day-block-time">Flexible</div>
+              <div className="day-block-time">All day</div>
               <div className="day-block-events">
-                {flexible.map(r => <EventCard key={r.id} r={r} />)}
+                {alldayGCal.map(e => <GCalEventCard key={e.id} event={e} />)}
               </div>
             </div>
           )}
 
-          {timed.map(r => (
-            <div key={r.id} className="day-block">
-              <div className="day-block-time">{fmtTime(r.time)}</div>
+          {/* Flexible routines */}
+          {flexRout.length > 0 && (
+            <div className="day-block">
+              <div className="day-block-time">Flexible</div>
               <div className="day-block-events">
-                <EventCard r={r} />
+                {flexRout.map(r => <RoutineCard key={r.id} r={r} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Timed items merged and sorted */}
+          {timedItems.map((item, i) => (
+            <div key={i} className="day-block">
+              <div className="day-block-time">
+                {item.type === 'routine' ? fmtTime(item.time) : eventTimeLabel(item.data)}
+              </div>
+              <div className="day-block-events">
+                {item.type === 'routine'
+                  ? <RoutineCard r={item.data} />
+                  : <GCalEventCard event={item.data} />
+                }
               </div>
             </div>
           ))}
@@ -305,11 +369,27 @@ function DayView({ today, selected, setSelected, routinesForDate }) {
 // ─── ROOT ─────────────────────────────────────────────────────
 export default function Calendar({ userId }) {
   const today = new Date()
-  const [view,     setView]     = useState('month')
-  const [selected, setSelected] = useState(today)
-  const [routines, setRoutines] = useState([])
-  const [loading,  setLoading]  = useState(!!userId)
+  const [view,        setView]        = useState('month')
+  const [selected,    setSelected]    = useState(today)
+  const [routines,    setRoutines]    = useState([])
+  const [loading,     setLoading]     = useState(!!userId)
 
+  // Google Calendar state
+  const [gisReady,    setGisReady]    = useState(false)
+  const [gcalToken,   setGcalToken]   = useState(null)
+  const [gcalEvents,  setGcalEvents]  = useState([])
+  const [gcalLoading, setGcalLoading] = useState(false)
+  const [gcalError,   setGcalError]   = useState('')
+
+  // Load GIS script on mount
+  useEffect(() => {
+    if (import.meta.env.VITE_GOOGLE_CLIENT_ID &&
+        import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'PASTE_YOUR_CLIENT_ID_HERE') {
+      loadGIS().then(() => setGisReady(true)).catch(() => {})
+    }
+  }, [])
+
+  // Load routines
   useEffect(() => {
     if (!userId) { setRoutines(SAMPLE_ROUTINES); return }
     setLoading(true)
@@ -324,6 +404,46 @@ export default function Calendar({ userId }) {
       })
   }, [userId])
 
+  // Fetch Google Calendar events (~3 month window around today)
+  const fetchGcalEvents = useCallback(async (token) => {
+    setGcalLoading(true)
+    setGcalError('')
+    try {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const end   = new Date(today.getFullYear(), today.getMonth() + 3, 0)
+      const events = await fetchEvents(token, start, end)
+      setGcalEvents(events)
+    } catch (err) {
+      if (err.message === 'TOKEN_EXPIRED') {
+        setGcalToken(null)
+        setGcalEvents([])
+        setGcalError('Google Calendar session expired. Reconnect to refresh.')
+      } else {
+        setGcalError('Could not load Google Calendar events.')
+      }
+    } finally {
+      setGcalLoading(false)
+    }
+  }, [])
+
+  function connectGcal() {
+    setGcalError('')
+    requestToken(
+      (token) => {
+        setGcalToken(token)
+        fetchGcalEvents(token)
+      },
+      (err) => setGcalError(err)
+    )
+  }
+
+  function disconnectGcal() {
+    revokeToken(gcalToken)
+    setGcalToken(null)
+    setGcalEvents([])
+    setGcalError('')
+  }
+
   function routinesForDate(date) {
     const dow = DOW_KEYS[date.getDay()]
     return routines
@@ -331,7 +451,21 @@ export default function Calendar({ userId }) {
       .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'))
   }
 
+  function gcalEventsForDate(date) {
+    return gcalEvents.filter(e => {
+      const start = eventStartDate(e)
+      return start && isSameDay(start, date)
+    }).sort((a, b) => {
+      const ta = a.start?.dateTime || a.start?.date || ''
+      const tb = b.start?.dateTime || b.start?.date || ''
+      return ta.localeCompare(tb)
+    })
+  }
+
   const VIEWS = ['Day', 'Week', 'Month']
+  const gcalConnected = !!gcalToken
+  const showGcalBtn = gisReady || (!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+    import.meta.env.VITE_GOOGLE_CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE')
 
   return (
     <div className="calendar-page">
@@ -339,31 +473,58 @@ export default function Calendar({ userId }) {
       <div className="page-header">
         <div>
           <h1 className="page-title">Calendar</h1>
-          <p className="page-sub">Your routines mapped across the week.</p>
+          <p className="page-sub">Your routines and events in one place.</p>
         </div>
-        <div className="cal-view-switcher">
-          {VIEWS.map(v => (
-            <button
-              key={v}
-              className={`cal-view-btn${view === v.toLowerCase() ? ' active' : ''}`}
-              onClick={() => setView(v.toLowerCase())}
-            >
-              {v}
+        <div className="cal-header-right">
+          {/* Google Calendar connect/disconnect */}
+          {gcalConnected ? (
+            <button className="gcal-btn gcal-btn-connected" onClick={disconnectGcal}>
+              <span className="gcal-dot connected" />
+              Google Calendar
             </button>
-          ))}
+          ) : (
+            <button
+              className="gcal-btn"
+              onClick={connectGcal}
+              disabled={gcalLoading || (!gisReady && !!import.meta.env.VITE_GOOGLE_CLIENT_ID && import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'PASTE_YOUR_CLIENT_ID_HERE')}
+              title={!gisReady ? 'Loading Google…' : 'Connect Google Calendar'}
+            >
+              {gcalLoading ? 'Connecting…' : '+ Google Calendar'}
+            </button>
+          )}
+
+          {/* View switcher */}
+          <div className="cal-view-switcher">
+            {VIEWS.map(v => (
+              <button
+                key={v}
+                className={`cal-view-btn${view === v.toLowerCase() ? ' active' : ''}`}
+                onClick={() => setView(v.toLowerCase())}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {gcalError && (
+        <div className="gcal-error">{gcalError}</div>
+      )}
 
       {loading ? (
         <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'40vh', color:'var(--text3)', fontSize:14 }}>
           Loading…
         </div>
       ) : view === 'month' ? (
-        <MonthView today={today} selected={selected} setSelected={setSelected} routinesForDate={routinesForDate} />
+        <MonthView today={today} selected={selected} setSelected={setSelected}
+          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate} />
       ) : view === 'week' ? (
-        <WeekView  today={today} selected={selected} setSelected={setSelected} routinesForDate={routinesForDate} />
+        <WeekView  today={today} selected={selected} setSelected={setSelected}
+          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate} />
       ) : (
-        <DayView   today={today} selected={selected} setSelected={setSelected} routinesForDate={routinesForDate} />
+        <DayView   today={today} selected={selected} setSelected={setSelected}
+          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate} />
       )}
 
     </div>
