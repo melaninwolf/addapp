@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { loadGIS, requestToken, revokeToken, fetchEvents, eventStartDate, eventTimeLabel, getSavedToken, clearSavedToken } from '../googleCalendar'
+import { loadGIS, connectGoogle, silentReconnect, disconnectGoogle, fetchEvents, eventStartDate, eventTimeLabel, isConnected, getCachedToken } from '../googleCalendar'
 import './Calendar.css'
 
 const SAMPLE_ROUTINES = [
@@ -376,17 +376,26 @@ export default function Calendar({ userId }) {
 
   // Google Calendar state
   const [gisReady,    setGisReady]    = useState(false)
-  const [gcalToken,   setGcalToken]   = useState(() => getSavedToken())
+  const [gcalToken,   setGcalToken]   = useState(() => getCachedToken())
   const [gcalEvents,  setGcalEvents]  = useState([])
   const [gcalLoading, setGcalLoading] = useState(false)
   const [gcalError,   setGcalError]   = useState('')
 
-  // Load GIS script on mount
+  // Load GIS script on mount, then silently reconnect if previously connected
   useEffect(() => {
-    if (import.meta.env.VITE_GOOGLE_CLIENT_ID &&
-        import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'PASTE_YOUR_CLIENT_ID_HERE') {
-      loadGIS().then(() => setGisReady(true)).catch(() => {})
-    }
+    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+        import.meta.env.VITE_GOOGLE_CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE') return
+
+    loadGIS().then(() => {
+      setGisReady(true)
+      // If user has connected before, silently get a fresh token
+      if (isConnected()) {
+        silentReconnect(
+          (token) => { setGcalToken(token); fetchGcalEvents(token) },
+          ()      => { setGcalToken(null) } // silent fail — show connect button
+        )
+      }
+    }).catch(() => {})
   }, [])
 
   // Load routines
@@ -426,26 +435,16 @@ export default function Calendar({ userId }) {
     }
   }, [])
 
-  // Auto-fetch events if we have a saved token from a previous navigation
-  useEffect(() => {
-    const saved = getSavedToken()
-    if (saved) fetchGcalEvents(saved)
-  }, [fetchGcalEvents])
-
   function connectGcal() {
     setGcalError('')
-    requestToken(
-      (token) => {
-        setGcalToken(token)
-        fetchGcalEvents(token)
-      },
-      (err) => setGcalError(err)
+    connectGoogle(
+      (token) => { setGcalToken(token); fetchGcalEvents(token) },
+      (err)   => setGcalError(err)
     )
   }
 
   function disconnectGcal() {
-    revokeToken(gcalToken)
-    clearSavedToken()
+    disconnectGoogle(gcalToken)
     setGcalToken(null)
     setGcalEvents([])
     setGcalError('')
@@ -471,8 +470,6 @@ export default function Calendar({ userId }) {
 
   const VIEWS = ['Day', 'Week', 'Month']
   const gcalConnected = !!gcalToken
-  const showGcalBtn = gisReady || (!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-    import.meta.env.VITE_GOOGLE_CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE')
 
   return (
     <div className="calendar-page">
@@ -493,7 +490,7 @@ export default function Calendar({ userId }) {
             <button
               className="gcal-btn"
               onClick={connectGcal}
-              disabled={gcalLoading || (!gisReady && !!import.meta.env.VITE_GOOGLE_CLIENT_ID && import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'PASTE_YOUR_CLIENT_ID_HERE')}
+              disabled={gcalLoading || !gisReady}
               title={!gisReady ? 'Loading Google…' : 'Connect Google Calendar'}
             >
               {gcalLoading ? 'Connecting…' : '+ Google Calendar'}
