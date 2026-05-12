@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { loadGIS, requestToken, revokeToken, fetchEvents, eventStartDate, eventTimeLabel } from '../googleCalendar'
+import { loadGIS, requestToken, revokeToken, fetchEvents, eventStartDate, eventTimeLabel, getSavedToken, clearSavedToken } from '../googleCalendar'
 import './Calendar.css'
 
 const SAMPLE_ROUTINES = [
@@ -376,7 +376,7 @@ export default function Calendar({ userId }) {
 
   // Google Calendar state
   const [gisReady,    setGisReady]    = useState(false)
-  const [gcalToken,   setGcalToken]   = useState(null)
+  const [gcalToken,   setGcalToken]   = useState(() => getSavedToken())
   const [gcalEvents,  setGcalEvents]  = useState([])
   const [gcalLoading, setGcalLoading] = useState(false)
   const [gcalError,   setGcalError]   = useState('')
@@ -426,6 +426,12 @@ export default function Calendar({ userId }) {
     }
   }, [])
 
+  // Auto-fetch events if we have a saved token from a previous navigation
+  useEffect(() => {
+    const saved = getSavedToken()
+    if (saved) fetchGcalEvents(saved)
+  }, [fetchGcalEvents])
+
   function connectGcal() {
     setGcalError('')
     requestToken(
@@ -439,6 +445,7 @@ export default function Calendar({ userId }) {
 
   function disconnectGcal() {
     revokeToken(gcalToken)
+    clearSavedToken()
     setGcalToken(null)
     setGcalEvents([])
     setGcalError('')

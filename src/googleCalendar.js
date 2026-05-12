@@ -44,10 +44,33 @@ export function requestToken(onToken, onError) {
     scope:     SCOPE,
     callback:  (resp) => {
       if (resp.error) { onError(resp.error); return }
+      // Persist token + expiry so it survives navigation
+      const expiry = Date.now() + ((resp.expires_in ?? 3600) - 60) * 1000
+      sessionStorage.setItem('gcal_token', resp.access_token)
+      sessionStorage.setItem('gcal_token_expiry', String(expiry))
       onToken(resp.access_token)
     },
   })
   _tokenClient.requestAccessToken({ prompt: 'consent' })
+}
+
+/** Read a previously saved token from sessionStorage (returns null if missing/expired). */
+export function getSavedToken() {
+  const token  = sessionStorage.getItem('gcal_token')
+  const expiry = sessionStorage.getItem('gcal_token_expiry')
+  if (!token || !expiry) return null
+  if (Date.now() > parseInt(expiry)) {
+    sessionStorage.removeItem('gcal_token')
+    sessionStorage.removeItem('gcal_token_expiry')
+    return null
+  }
+  return token
+}
+
+/** Clear persisted token. */
+export function clearSavedToken() {
+  sessionStorage.removeItem('gcal_token')
+  sessionStorage.removeItem('gcal_token_expiry')
 }
 
 /**
