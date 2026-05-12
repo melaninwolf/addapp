@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Routines from './pages/Routines.jsx'
+import Calendar from './pages/Calendar.jsx'
 import Settings from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -92,12 +93,21 @@ function AppShell({ user }) {
             {showFull && <span>Routines</span>}
           </NavLink>
 
+          <NavLink
+            to="/calendar"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Calendar' : undefined}
+            onClick={closeDrawer}
+          >
+            <span className="nav-icon">📅</span>
+            {showFull && <span>Calendar</span>}
+          </NavLink>
+
           {[
-            { icon: '✅', label: 'Tasks'         },
-            { icon: '📅', label: 'Calendar'      },
-            { icon: '💚', label: 'Health'        },
-            { icon: '📓', label: 'Journal'       },
-            { icon: '🎯', label: 'Focus Session'  },
+            { icon: '✅', label: 'Tasks'        },
+            { icon: '💚', label: 'Health'       },
+            { icon: '📓', label: 'Journal'      },
+            { icon: '🎯', label: 'Focus Session' },
           ].map(item => (
             <div key={item.label} className="nav-item disabled" title={!showFull ? item.label : undefined}>
               <span className="nav-icon">{item.icon}</span>
@@ -147,7 +157,8 @@ function AppShell({ user }) {
       {/* ── MAIN ── */}
       <main className="main">
         <Routes>
-          <Route path="/"        element={<Routines userId={user?.id} />} />
+          <Route path="/"         element={<Routines userId={user?.id} />} />
+          <Route path="/calendar" element={<Calendar userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings
               settings={settings}
