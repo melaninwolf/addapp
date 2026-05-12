@@ -427,6 +427,58 @@
 /* ── DAY VIEW ─────────────────────────────────────────────── */
 .cal-day-layout { max-width: 640px; }
 
+/* Now indicator */
+.day-now-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 12px;
+  align-items: center;
+  margin: 4px 0;
+  position: relative;
+  z-index: 2;
+}
+.day-now-time {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: var(--mono);
+  text-align: right;
+  white-space: nowrap;
+}
+.day-now-bar {
+  display: flex;
+  align-items: center;
+}
+.day-now-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.day-now-track {
+  flex: 1;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+/* Past item states */
+.day-time-past {
+  opacity: 0.35;
+}
+.card-past {
+  opacity: 0.55;
+}
+.card-past .ec-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--text3);
+}
+.ec-emoji-overdue {
+  background: var(--red-bg) !important;
+  border: 1px solid var(--red) !important;
+}
+
 .day-empty {
   display: flex;
   flex-direction: column;

@@ -86,10 +86,10 @@ function CalNav({ onPrev, onNext, label }) {
 }
 
 // ─── Routine card (used in Week + Day views) ─────────────────
-function RoutineCard({ r }) {
+function RoutineCard({ r, isPast = false }) {
   return (
-    <div className="event-card routine-card-cal">
-      <div className="ec-emoji">{r.emoji}</div>
+    <div className={`event-card routine-card-cal${isPast ? ' card-past' : ''}`}>
+      <div className={`ec-emoji${isPast ? ' ec-emoji-overdue' : ''}`}>{r.emoji}</div>
       <div className="ec-body">
         <div className="ec-name">{r.name}</div>
         <div className="ec-meta">
@@ -102,14 +102,30 @@ function RoutineCard({ r }) {
 }
 
 // ─── Google Calendar event card ──────────────────────────────
-function GCalEventCard({ event }) {
+function GCalEventCard({ event, isPast = false }) {
   const timeLabel = eventTimeLabel(event)
   return (
-    <div className="event-card gcal-card">
+    <div className={`event-card gcal-card${isPast ? ' card-past' : ''}`}>
       <div className="ec-emoji gcal-icon">📅</div>
       <div className="ec-body">
         <div className="ec-name">{event.summary || '(No title)'}</div>
         <div className="ec-meta gcal-time">{timeLabel}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Now indicator line ───────────────────────────────────────
+function NowLine({ now }) {
+  const h = now.getHours()
+  const m = now.getMinutes()
+  const label = `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+  return (
+    <div className="day-now-row">
+      <div className="day-now-time">{label}</div>
+      <div className="day-now-bar">
+        <div className="day-now-dot" />
+        <div className="day-now-track" />
       </div>
     </div>
   )
@@ -281,20 +297,36 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
 
 // ─── DAY VIEW ─────────────────────────────────────────────────
 function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
+  const [now, setNow] = useState(() => new Date())
+
+  // Tick every minute — very cheap, just updates a Date object
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   function prev() { const d = new Date(selected); d.setDate(d.getDate() - 1); setSelected(d) }
   function next() { const d = new Date(selected); d.setDate(d.getDate() + 1); setSelected(d) }
 
-  const isToday  = isSameDay(selected, today)
-  const dayRout  = routinesForDate(selected)
-  const dayGCal  = gcalEventsForDate(selected)
+  const isToday   = isSameDay(selected, today)
+  const isPastDay = selected < today && !isToday   // entire day is in the past
+  const dayRout   = routinesForDate(selected)
+  const dayGCal   = gcalEventsForDate(selected)
 
-  // Sort all timed items together by time
-  const timedRout   = dayRout.filter(r => r.time)
-  const flexRout    = dayRout.filter(r => !r.time)
-  const timedGCal   = dayGCal.filter(e => e.start?.dateTime)
-  const alldayGCal  = dayGCal.filter(e => e.start?.date && !e.start?.dateTime)
+  // "HH:MM" string for now — used for comparisons
+  const nowStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
 
-  // Merge timed routines + gcal events, sorted by time
+  function isTimePast(timeStr) {
+    if (isPastDay) return true
+    if (!isToday)  return false  // future day — nothing is overdue
+    return timeStr <= nowStr
+  }
+
+  const timedRout  = dayRout.filter(r => r.time)
+  const flexRout   = dayRout.filter(r => !r.time)
+  const timedGCal  = dayGCal.filter(e => e.start?.dateTime)
+  const alldayGCal = dayGCal.filter(e => e.start?.date && !e.start?.dateTime)
+
   const timedItems = [
     ...timedRout.map(r => ({ type: 'routine', time: r.time, data: r })),
     ...timedGCal.map(e => ({
@@ -305,6 +337,33 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
   ].sort((a, b) => a.time.localeCompare(b.time))
 
   const hasAnything = dayRout.length > 0 || dayGCal.length > 0
+
+  // Build timed blocks with NowLine inserted at the right position
+  const timedBlocks = []
+  let nowInserted = !isToday  // don't show line on past/future days
+  for (let i = 0; i < timedItems.length; i++) {
+    const item = timedItems[i]
+    if (!nowInserted && item.time > nowStr) {
+      timedBlocks.push(<NowLine key="now" now={now} />)
+      nowInserted = true
+    }
+    const past = isTimePast(item.time)
+    timedBlocks.push(
+      <div key={i} className="day-block">
+        <div className={`day-block-time${past ? ' day-time-past' : ''}`}>
+          {item.type === 'routine' ? fmtTime(item.time) : eventTimeLabel(item.data)}
+        </div>
+        <div className="day-block-events">
+          {item.type === 'routine'
+            ? <RoutineCard  r={item.data}     isPast={past} />
+            : <GCalEventCard event={item.data} isPast={past} />
+          }
+        </div>
+      </div>
+    )
+  }
+  // If all timed items are past, append the now line at the bottom
+  if (!nowInserted) timedBlocks.push(<NowLine key="now" now={now} />)
 
   const dateLabel = (
     <>
@@ -325,17 +384,15 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
       ) : (
         <div className="day-timeline">
 
-          {/* All-day Google Calendar events */}
           {alldayGCal.length > 0 && (
             <div className="day-block">
               <div className="day-block-time">All day</div>
               <div className="day-block-events">
-                {alldayGCal.map(e => <GCalEventCard key={e.id} event={e} />)}
+                {alldayGCal.map(e => <GCalEventCard key={e.id} event={e} isPast={isPastDay} />)}
               </div>
             </div>
           )}
 
-          {/* Flexible routines */}
           {flexRout.length > 0 && (
             <div className="day-block">
               <div className="day-block-time">Flexible</div>
@@ -345,20 +402,7 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
             </div>
           )}
 
-          {/* Timed items merged and sorted */}
-          {timedItems.map((item, i) => (
-            <div key={i} className="day-block">
-              <div className="day-block-time">
-                {item.type === 'routine' ? fmtTime(item.time) : eventTimeLabel(item.data)}
-              </div>
-              <div className="day-block-events">
-                {item.type === 'routine'
-                  ? <RoutineCard r={item.data} />
-                  : <GCalEventCard event={item.data} />
-                }
-              </div>
-            </div>
-          ))}
+          {timedBlocks}
 
         </div>
       )}
