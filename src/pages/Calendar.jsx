@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
 import { loadGIS, connectGoogle, silentReconnect, disconnectGoogle, fetchEvents, eventStartDate, eventTimeLabel, isConnected, getCachedToken } from '../googleCalendar'
 import './Calendar.css'
@@ -85,11 +85,11 @@ function CalNav({ onPrev, onNext, label }) {
   )
 }
 
-// ─── Routine card (used in Week + Day views) ─────────────────
-function RoutineCard({ r, isPast = false }) {
+// ─── Routine card (used in Month detail + Week views) ────────
+function RoutineCard({ r }) {
   return (
-    <div className={`event-card routine-card-cal${isPast ? ' card-past' : ''}`}>
-      <div className={`ec-emoji${isPast ? ' ec-emoji-overdue' : ''}`}>{r.emoji}</div>
+    <div className="event-card routine-card-cal">
+      <div className="ec-emoji">{r.emoji}</div>
       <div className="ec-body">
         <div className="ec-name">{r.name}</div>
         <div className="ec-meta">
@@ -101,31 +101,15 @@ function RoutineCard({ r, isPast = false }) {
   )
 }
 
-// ─── Google Calendar event card ──────────────────────────────
-function GCalEventCard({ event, isPast = false }) {
+// ─── Google Calendar event card (Month detail + Week) ────────
+function GCalEventCard({ event }) {
   const timeLabel = eventTimeLabel(event)
   return (
-    <div className={`event-card gcal-card${isPast ? ' card-past' : ''}`}>
+    <div className="event-card gcal-card">
       <div className="ec-emoji gcal-icon">📅</div>
       <div className="ec-body">
         <div className="ec-name">{event.summary || '(No title)'}</div>
         <div className="ec-meta gcal-time">{timeLabel}</div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Now indicator line ───────────────────────────────────────
-function NowLine({ now }) {
-  const h = now.getHours()
-  const m = now.getMinutes()
-  const label = `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
-  return (
-    <div className="day-now-row">
-      <div className="day-now-time">{label}</div>
-      <div className="day-now-bar">
-        <div className="day-now-dot" />
-        <div className="day-now-track" />
       </div>
     </div>
   )
@@ -295,75 +279,64 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
   )
 }
 
-// ─── DAY VIEW ─────────────────────────────────────────────────
+// ─── DAY VIEW (time-block grid) ───────────────────────────────
+const PX_PER_HOUR = 64
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+
+function hourLabel(h) {
+  if (h === 0)  return '12 AM'
+  if (h < 12)   return `${h} AM`
+  if (h === 12) return '12 PM'
+  return `${h - 12} PM`
+}
+
 function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
   const [now, setNow] = useState(() => new Date())
+  const scrollRef = useRef(null)
 
-  // Tick every minute — very cheap, just updates a Date object
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000)
     return () => clearInterval(id)
   }, [])
 
+  // Scroll to 1 hour before now (today) or 7 AM (other days) on mount/date change
+  useEffect(() => {
+    if (!scrollRef.current) return
+    const isToday = isSameDay(selected, today)
+    const scrollHour = isToday ? Math.max(0, now.getHours() - 1) : 7
+    scrollRef.current.scrollTop = scrollHour * PX_PER_HOUR
+  }, [selected])
+
   function prev() { const d = new Date(selected); d.setDate(d.getDate() - 1); setSelected(d) }
   function next() { const d = new Date(selected); d.setDate(d.getDate() + 1); setSelected(d) }
 
-  const isToday   = isSameDay(selected, today)
-  const isPastDay = selected < today && !isToday   // entire day is in the past
-  const dayRout   = routinesForDate(selected)
-  const dayGCal   = gcalEventsForDate(selected)
-
-  // "HH:MM" string for now — used for comparisons
-  const nowStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
-
-  function isTimePast(timeStr) {
-    if (isPastDay) return true
-    if (!isToday)  return false  // future day — nothing is overdue
-    return timeStr <= nowStr
-  }
-
+  const isToday    = isSameDay(selected, today)
+  const dayRout    = routinesForDate(selected)
+  const dayGCal    = gcalEventsForDate(selected)
   const timedRout  = dayRout.filter(r => r.time)
   const flexRout   = dayRout.filter(r => !r.time)
   const timedGCal  = dayGCal.filter(e => e.start?.dateTime)
   const alldayGCal = dayGCal.filter(e => e.start?.date && !e.start?.dateTime)
 
-  const timedItems = [
-    ...timedRout.map(r => ({ type: 'routine', time: r.time, data: r })),
-    ...timedGCal.map(e => ({
-      type: 'gcal',
-      time: new Date(e.start.dateTime).toTimeString().slice(0, 5),
-      data: e,
-    })),
-  ].sort((a, b) => a.time.localeCompare(b.time))
+  // Now-line position (pixels from midnight)
+  const nowTop = (now.getHours() + now.getMinutes() / 60) * PX_PER_HOUR
 
-  const hasAnything = dayRout.length > 0 || dayGCal.length > 0
-
-  // Build timed blocks with NowLine inserted at the right position
-  const timedBlocks = []
-  let nowInserted = !isToday  // don't show line on past/future days
-  for (let i = 0; i < timedItems.length; i++) {
-    const item = timedItems[i]
-    if (!nowInserted && item.time > nowStr) {
-      timedBlocks.push(<NowLine key="now" now={now} />)
-      nowInserted = true
-    }
-    const past = isTimePast(item.time)
-    timedBlocks.push(
-      <div key={i} className="day-block">
-        <div className={`day-block-time${past ? ' day-time-past' : ''}`}>
-          {item.type === 'routine' ? fmtTime(item.time) : eventTimeLabel(item.data)}
-        </div>
-        <div className="day-block-events">
-          {item.type === 'routine'
-            ? <RoutineCard  r={item.data}     isPast={past} />
-            : <GCalEventCard event={item.data} isPast={past} />
-          }
-        </div>
-      </div>
-    )
-  }
-  // If all timed items are past, append the now line at the bottom
-  if (!nowInserted) timedBlocks.push(<NowLine key="now" now={now} />)
+  // Build positioned event blocks
+  const eventBlocks = [
+    ...timedRout.map(r => {
+      const [h, m] = r.time.split(':').map(Number)
+      const startMin = h * 60 + m
+      const durMin = Math.max(30, totalMins(r.steps))
+      return { type: 'routine', startMin, durMin, data: r, key: `r-${r.id}` }
+    }),
+    ...timedGCal.map(e => {
+      const start   = new Date(e.start.dateTime)
+      const end     = e.end?.dateTime ? new Date(e.end.dateTime) : new Date(start.getTime() + 60 * 60000)
+      const startMin = start.getHours() * 60 + start.getMinutes()
+      const durMin   = Math.max(30, Math.round((end - start) / 60000))
+      return { type: 'gcal', startMin, durMin, data: e, key: `g-${e.id}` }
+    }),
+  ]
 
   const dateLabel = (
     <>
@@ -376,36 +349,94 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
     <div className="cal-day-layout">
       <CalNav onPrev={prev} onNext={next} label={dateLabel} />
 
-      {!hasAnything ? (
-        <div className="day-empty">
-          <span>🗓</span>
-          <span>Nothing scheduled for this day</span>
-        </div>
-      ) : (
-        <div className="day-timeline">
-
+      {/* All-day & flexible chips */}
+      {(alldayGCal.length > 0 || flexRout.length > 0) && (
+        <div className="day-header-section">
           {alldayGCal.length > 0 && (
-            <div className="day-block">
-              <div className="day-block-time">All day</div>
-              <div className="day-block-events">
-                {alldayGCal.map(e => <GCalEventCard key={e.id} event={e} isPast={isPastDay} />)}
+            <div className="day-allday-row">
+              <div className="day-time-col-label">All day</div>
+              <div className="day-chips">
+                {alldayGCal.map(e => (
+                  <div key={e.id} className="day-chip day-chip-gcal">📅 {e.summary || '(No title)'}</div>
+                ))}
               </div>
             </div>
           )}
-
           {flexRout.length > 0 && (
-            <div className="day-block">
-              <div className="day-block-time">Flexible</div>
-              <div className="day-block-events">
-                {flexRout.map(r => <RoutineCard key={r.id} r={r} />)}
+            <div className="day-allday-row">
+              <div className="day-time-col-label">Flexible</div>
+              <div className="day-chips">
+                {flexRout.map(r => (
+                  <div key={r.id} className="day-chip">{r.emoji} {r.name}</div>
+                ))}
               </div>
             </div>
           )}
-
-          {timedBlocks}
-
         </div>
       )}
+
+      {/* Time grid */}
+      <div className="day-grid-scroll" ref={scrollRef}>
+        <div className="day-grid" style={{ height: `${24 * PX_PER_HOUR}px` }}>
+
+          {/* Hour rows */}
+          {HOURS.map(h => (
+            <div key={h} className="day-hour-row" style={{ top: h * PX_PER_HOUR }}>
+              <div className="day-hour-label">{hourLabel(h)}</div>
+              <div className="day-hour-line" />
+            </div>
+          ))}
+
+          {/* Events */}
+          <div className="day-events-col">
+            {eventBlocks.map(block => {
+              const top    = (block.startMin / 60) * PX_PER_HOUR
+              const height = Math.max(24, (block.durMin / 60) * PX_PER_HOUR - 2)
+              const isShort = height < 44
+              return (
+                <div
+                  key={block.key}
+                  className={`day-event-block${block.type === 'gcal' ? ' day-event-gcal' : ' day-event-routine'}`}
+                  style={{ top, height }}
+                >
+                  {block.type === 'routine' ? (
+                    <>
+                      <span className="deb-emoji">{block.data.emoji}</span>
+                      <div className="deb-body">
+                        <div className="deb-name">{block.data.name}</div>
+                        {!isShort && block.data.steps?.length > 0 && (
+                          <div className="deb-meta">{block.data.steps.length} steps · {block.durMin} min</div>
+                        )}
+                        {!isShort && block.data.type === 'trigger' && (
+                          <div className="deb-meta">🕹️ Trigger</div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="deb-emoji">📅</span>
+                      <div className="deb-body">
+                        <div className="deb-name">{block.data.summary || '(No title)'}</div>
+                        {!isShort && (
+                          <div className="deb-meta gcal-time">{eventTimeLabel(block.data)}</div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Now line */}
+            {isToday && (
+              <div className="day-now-line" style={{ top: nowTop }}>
+                <div className="day-now-dot" />
+                <div className="day-now-track" />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -413,7 +444,7 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
 // ─── ROOT ─────────────────────────────────────────────────────
 export default function Calendar({ userId }) {
   const today = new Date()
-  const [view,        setView]        = useState('month')
+  const [view,        setView]        = useState('day')
   const [selected,    setSelected]    = useState(today)
   const [routines,    setRoutines]    = useState([])
   const [loading,     setLoading]     = useState(!!userId)
