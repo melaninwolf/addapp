@@ -279,6 +279,48 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
   )
 }
 
+// ─── Overlap layout ───────────────────────────────────────────
+// Groups overlapping events and assigns each a column index so
+// they can be rendered side-by-side instead of on top of each other.
+function layoutEvents(blocks) {
+  if (!blocks.length) return []
+  const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin)
+
+  // Split into non-overlapping clusters
+  const clusters = []
+  let cluster = [sorted[0]]
+  let clusterEnd = sorted[0].startMin + sorted[0].durMin
+
+  for (let i = 1; i < sorted.length; i++) {
+    const b = sorted[i]
+    if (b.startMin < clusterEnd) {
+      cluster.push(b)
+      clusterEnd = Math.max(clusterEnd, b.startMin + b.durMin)
+    } else {
+      clusters.push(cluster)
+      cluster = [b]
+      clusterEnd = b.startMin + b.durMin
+    }
+  }
+  clusters.push(cluster)
+
+  const layoutMap = new Map()
+  for (const grp of clusters) {
+    const colEnds = []  // colEnds[i] = minute at which column i becomes free
+    const assignments = []
+    for (const b of grp) {
+      let col = colEnds.findIndex(end => end <= b.startMin)
+      if (col === -1) { col = colEnds.length; colEnds.push(0) }
+      colEnds[col] = b.startMin + b.durMin
+      assignments.push({ key: b.key, col })
+    }
+    const totalCols = colEnds.length
+    for (const { key, col } of assignments) layoutMap.set(key, { col, totalCols })
+  }
+
+  return blocks.map(b => ({ ...b, ...layoutMap.get(b.key) }))
+}
+
 // ─── DAY VIEW (time-block grid) ───────────────────────────────
 const PX_PER_HOUR = 64
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -321,8 +363,8 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
   // Now-line position (pixels from midnight)
   const nowTop = (now.getHours() + now.getMinutes() / 60) * PX_PER_HOUR
 
-  // Build positioned event blocks
-  const eventBlocks = [
+  // Build positioned event blocks with overlap columns
+  const rawBlocks = [
     ...timedRout.map(r => {
       const [h, m] = r.time.split(':').map(Number)
       const startMin = h * 60 + m
@@ -337,6 +379,7 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
       return { type: 'gcal', startMin, durMin, data: e, key: `g-${e.id}` }
     }),
   ]
+  const eventBlocks = layoutEvents(rawBlocks)
 
   const dateLabel = (
     <>
@@ -390,14 +433,17 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
           {/* Events */}
           <div className="day-events-col">
             {eventBlocks.map(block => {
-              const top    = (block.startMin / 60) * PX_PER_HOUR
-              const height = Math.max(24, (block.durMin / 60) * PX_PER_HOUR - 2)
-              const isShort = height < 44
+              const top      = (block.startMin / 60) * PX_PER_HOUR
+              const height   = Math.max(24, (block.durMin / 60) * PX_PER_HOUR - 2)
+              const isShort  = height < 44
+              const pct      = 100 / block.totalCols
+              const colLeft  = `calc(${block.col * pct}% + 4px)`
+              const colWidth = `calc(${pct}% - 8px)`
               return (
                 <div
                   key={block.key}
                   className={`day-event-block${block.type === 'gcal' ? ' day-event-gcal' : ' day-event-routine'}`}
-                  style={{ top, height }}
+                  style={{ top, height, left: colLeft, width: colWidth, right: 'auto' }}
                 >
                   {block.type === 'routine' ? (
                     <>
