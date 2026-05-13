@@ -162,7 +162,7 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
 }
 
 // ─── Task Card ───────────────────────────────────────────────
-function TaskCard({ task, categories, onEdit, onDragStart, onDragEnd, isDragging }) {
+function TaskCard({ task, categories, onEdit, onToggleDone, onDragStart, onDragEnd, isDragging }) {
   const cat  = categories.find(c => c.id === task.category_id)
   const late = isPastDue(task.due_date) && task.status !== 'done'
   const done = task.status === 'done'
@@ -177,7 +177,13 @@ function TaskCard({ task, categories, onEdit, onDragStart, onDragEnd, isDragging
       onClick={() => onEdit(task)}
     >
       <div className="tc-top">
-        <div className="tc-pri-dot" style={{ background: priColor(task.priority) }} />
+        <button
+          className={`tc-check${done ? ' tc-check-done' : ''}`}
+          onClick={e => { e.stopPropagation(); onToggleDone(task) }}
+          title={done ? 'Mark incomplete' : 'Mark done'}
+        >
+          {done && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 3L9 1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        </button>
         <div className="tc-title">{task.title}</div>
       </div>
       {(task.due_date || cat) && (
@@ -201,7 +207,7 @@ function TaskCard({ task, categories, onEdit, onDragStart, onDragEnd, isDragging
 }
 
 // ─── Kanban Column ────────────────────────────────────────────
-function KanbanColumn({ status, tasks, categories, onAddTask, onEdit, dragId, dragTarget, onDragStart, onDragEnd, onDragOver, onDrop }) {
+function KanbanColumn({ status, tasks, categories, onAddTask, onEdit, onToggleDone, dragId, dragTarget, onDragStart, onDragEnd, onDragOver, onDrop }) {
   const colTasks = tasks
     .filter(t => t.status === status.key)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
@@ -233,6 +239,7 @@ function KanbanColumn({ status, tasks, categories, onAddTask, onEdit, dragId, dr
                 task={task}
                 categories={categories}
                 onEdit={onEdit}
+                onToggleDone={onToggleDone}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 isDragging={dragId === task.id}
@@ -331,6 +338,11 @@ export default function Tasks({ userId }) {
     const { data } = await supabase
       .from('task_categories').insert([{ name: name.trim(), color, user_id: userId, sort_order: maxOrder + 10 }]).select()
     if (data) setCategories(prev => [...prev, ...data])
+  }
+
+  function handleToggleDone(task) {
+    const newStatus = task.status === 'done' ? 'todo' : 'done'
+    updateTaskField(task.id, { status: newStatus })
   }
 
   async function deleteCategory(id) {
@@ -456,6 +468,31 @@ export default function Tasks({ userId }) {
               categories={categories}
               onAddTask={openAdd}
               onEdit={openEdit}
+              onToggleDone={handleToggleDone}
+              dragId={dragId}
+              dragTarget={dragTarget}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            />
+          ))}
+        </div>
+      )}
+
+      <TaskFormModal
+        open={showForm}
+        onClose={() => { setShowForm(false); setEditingTask(null) }}
+        onSave={saveTask}
+        onDelete={deleteTask}
+        task={editingTask}
+        categories={categories}
+        defaultStatus={defStatus}
+      />
+    </div>
+  )
+}
+              onToggleDone={handleToggleDone}
               dragId={dragId}
               dragTarget={dragTarget}
               onDragStart={handleDragStart}
