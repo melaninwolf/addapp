@@ -1,0 +1,443 @@
+/* ── Tasks page ──────────────────────────────────────────── */
+.tasks-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 2rem 2rem 0;
+  box-sizing: border-box;
+}
+
+/* ── Category filter bar ─────────────────────────────────── */
+.cat-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 0 1rem;
+  flex-shrink: 0;
+}
+
+.cat-pill-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cat-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: var(--card);
+  color: var(--text2);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.cat-pill:hover {
+  border-color: var(--border3);
+  color: var(--text1);
+}
+
+.cat-pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.cat-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cat-pill-count {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: 2px;
+}
+
+.cat-del-btn {
+  position: absolute;
+  right: -7px;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text3);
+  font-size: 11px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+  z-index: 2;
+}
+
+.cat-pill-wrap:hover .cat-del-btn {
+  display: flex;
+}
+
+.cat-del-btn:hover {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* Category add inline */
+.cat-add-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cat-add-input {
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--accent);
+  background: var(--card);
+  color: var(--text1);
+  font-size: 12.5px;
+  outline: none;
+  width: 120px;
+}
+
+.cat-add-input::placeholder { color: var(--text3); }
+
+.cat-add-confirm,
+.cat-add-cancel {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--card);
+  color: var(--text2);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.cat-add-confirm:hover { background: var(--green-bg, #0d2b1a); color: var(--green); border-color: var(--green); }
+.cat-add-cancel:hover  { background: var(--red-bg);            color: var(--red);   border-color: var(--red);   }
+
+.cat-new-btn {
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px dashed var(--border2);
+  background: transparent;
+  color: var(--text3);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.cat-new-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Kanban board ─────────────────────────────────────────── */
+.kb-board {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1.5rem;
+  min-height: 0;
+}
+
+.kb-board::-webkit-scrollbar { height: 6px; }
+.kb-board::-webkit-scrollbar-track { background: transparent; }
+.kb-board::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Kanban column ───────────────────────────────────────── */
+.kb-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--bg2);
+  border: 1px solid var(--border1);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.kb-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 10px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.kb-col-accent-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--col-accent, var(--border2));
+  border-radius: 14px 14px 0 0;
+  opacity: 0.7;
+}
+
+.kb-col-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text1);
+  flex: 1;
+}
+
+.kb-col-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text3);
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 1px 7px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.kb-col-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.kb-col-body::-webkit-scrollbar { width: 4px; }
+.kb-col-body::-webkit-scrollbar-track { background: transparent; }
+.kb-col-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ── Drop indicator ──────────────────────────────────────── */
+.kb-drop-line {
+  height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin: 3px 0;
+  opacity: 0.8;
+  animation: dropLinePulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes dropLinePulse {
+  from { opacity: 0.5; }
+  to   { opacity: 1;   }
+}
+
+.tc-wrap {
+  margin-bottom: 7px;
+}
+
+/* ── Task card ───────────────────────────────────────────── */
+.task-card {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+  position: relative;
+  user-select: none;
+}
+
+.task-card:hover {
+  border-color: var(--border3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+
+.task-card.tc-dragging {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.task-card.tc-done {
+  opacity: 0.45;
+}
+
+.task-card.tc-done .tc-title {
+  text-decoration: line-through;
+  color: var(--text3);
+}
+
+.tc-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tc-pri-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.tc-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text1);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.tc-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.tc-due {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.tc-due.tc-late {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.tc-cat-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.tc-notes {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text3);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+/* ── Empty + Add buttons ─────────────────────────────────── */
+.kb-empty {
+  text-align: center;
+  color: var(--text3);
+  font-size: 12.5px;
+  padding: 1.5rem 0;
+  flex: 1;
+}
+
+.kb-add-btn {
+  width: 100%;
+  padding: 7px;
+  border: 1px dashed var(--border2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text3);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.kb-add-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* ── Priority picker ─────────────────────────────────────── */
+.pri-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pri-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--card);
+  color: var(--text2);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.pri-btn:hover {
+  border-color: var(--pri);
+  color: var(--text1);
+}
+
+.pri-btn.active {
+  border-color: var(--pri);
+  background: color-mix(in srgb, var(--pri) 14%, transparent);
+  color: var(--pri);
+}
+
+.pri-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .tasks-page {
+    padding: 1.25rem 1rem 0;
+  }
+
+  .kb-board {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    gap: 12px;
+  }
+
+  .kb-col {
+    min-width: unset;
+    max-width: unset;
+    flex: unset;
+  }
+
+  .kb-col-body {
+    max-height: 60vh;
+  }
+}

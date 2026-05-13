@@ -1,0 +1,57 @@
+.ep-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ep-trigger {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s;
+  line-height: 1;
+}
+.ep-trigger:hover { border-color: var(--border2); }
+
+.ep-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 300;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  width: 268px;
+}
+
+.ep-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+
+.ep-opt {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+  line-height: 1;
+  padding: 0;
+}
+.ep-opt:hover    { background: var(--bg3); }
+.ep-opt-active   { background: var(--accent-glow); }

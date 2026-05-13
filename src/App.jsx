@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router
 import { useState, useEffect } from 'react'
 import Routines from './pages/Routines.jsx'
 import Calendar from './pages/Calendar.jsx'
+import Tasks    from './pages/Tasks.jsx'
 import Settings from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -10,6 +11,64 @@ import { supabase } from './supabase'
 import { syncXPFromDb } from './xp'
 import './App.css'
 import './fonts/fonts.css'
+
+function AccountPage({ user, onSignOut, onBack }) {
+  const [newPw,   setNewPw]   = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [msg,     setMsg]     = useState('')
+  const [err,     setErr]     = useState('')
+
+  async function handleChangePw(e) {
+    e.preventDefault()
+    setMsg(''); setErr('')
+    if (newPw.length < 6)   { setErr('Password must be at least 6 characters.'); return }
+    if (newPw !== confirm)  { setErr("Passwords don't match."); return }
+    setSaving(true)
+    const { error } = await supabase.auth.updateUser({ password: newPw })
+    setSaving(false)
+    if (error) setErr(error.message)
+    else { setMsg('Password updated! You can now log in with it.'); setNewPw(''); setConfirm('') }
+  }
+
+  return (
+    <div className="placeholder-page">
+      <button className="back-btn" onClick={onBack}>Back</button>
+      <h1>Account</h1>
+      <p style={{ color:'var(--text2)', fontSize:14, marginBottom:'2rem' }}>{user?.email}</p>
+
+      <div style={{ maxWidth: 360 }}>
+        <h2 style={{ fontSize:15, fontWeight:600, color:'var(--text1)', marginBottom:'1rem' }}>Change password</h2>
+        <form onSubmit={handleChangePw} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <input
+            type="password" placeholder="New password" minLength={6} required
+            value={newPw} onChange={e => setNewPw(e.target.value)}
+            style={{ padding:'9px 12px', borderRadius:8, border:'1px solid var(--border2)',
+                     background:'var(--card)', color:'var(--text1)', fontSize:14, outline:'none' }}
+          />
+          <input
+            type="password" placeholder="Confirm new password" minLength={6} required
+            value={confirm} onChange={e => setConfirm(e.target.value)}
+            style={{ padding:'9px 12px', borderRadius:8, border:'1px solid var(--border2)',
+                     background:'var(--card)', color:'var(--text1)', fontSize:14, outline:'none' }}
+          />
+          {err && <p style={{ color:'var(--red)',   fontSize:13, margin:0 }}>{err}</p>}
+          {msg && <p style={{ color:'var(--green)', fontSize:13, margin:0 }}>{msg}</p>}
+          <button type="submit" disabled={saving}
+            style={{ padding:'9px 16px', borderRadius:8, background:'var(--accent)',
+                     color:'#fff', fontWeight:600, fontSize:14, border:'none',
+                     cursor:'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Saving...' : 'Update password'}
+          </button>
+        </form>
+      </div>
+
+      <div style={{ marginTop:'2.5rem' }}>
+        <button className="btn-danger btn-sm" onClick={onSignOut}>Sign out</button>
+      </div>
+    </div>
+  )
+}
 
 function AppShell({ user }) {
   const [collapsed, setCollapsed]   = useState(false)
@@ -54,93 +113,71 @@ function AppShell({ user }) {
   return (
     <div className={`layout${collapsed ? ' sb-collapsed' : ''}${drawerOpen ? ' sb-open' : ''}`}>
 
-      {/* ── MOBILE HEADER ── */}
       <div className="mobile-header">
-        <button
-          className="hamburger-btn"
-          onClick={() => setDrawerOpen(d => !d)}
-          aria-label="Open menu"
-        >☰</button>
+        <button className="hamburger-btn" onClick={() => setDrawerOpen(d => !d)} aria-label="Open menu">
+          hamburger
+        </button>
         <div className="logo">add<span>app</span></div>
       </div>
 
-      {/* ── DRAWER BACKDROP ── */}
       {drawerOpen && <div className="drawer-backdrop" onClick={closeDrawer} />}
 
-      {/* ── SIDEBAR ── */}
       <nav className="sidebar">
-
         <div className="sb-head">
           {showFull && <div className="logo">add<span>app</span></div>}
-          <button
-            className="sb-toggle"
-            onClick={() => setCollapsed(c => !c)}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? '▶' : '◀'}
+          <button className="sb-toggle" onClick={() => setCollapsed(c => !c)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            {collapsed ? '>' : '<'}
           </button>
         </div>
 
         <div className="nav-links">
-          <NavLink
-            to="/"
-            end
+          <NavLink to="/" end
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
-            title={!showFull ? 'Routines' : undefined}
-            onClick={closeDrawer}
-          >
-            <span className="nav-icon">⚡</span>
+            title={!showFull ? 'Routines' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">bolt</span>
             {showFull && <span>Routines</span>}
           </NavLink>
 
-          <NavLink
-            to="/calendar"
+          <NavLink to="/calendar"
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
-            title={!showFull ? 'Calendar' : undefined}
-            onClick={closeDrawer}
-          >
-            <span className="nav-icon">📅</span>
+            title={!showFull ? 'Calendar' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">cal</span>
             {showFull && <span>Calendar</span>}
           </NavLink>
 
+          <NavLink to="/tasks"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Tasks' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">check</span>
+            {showFull && <span>Tasks</span>}
+          </NavLink>
+
           {[
-            { icon: '✅', label: 'Tasks'        },
-            { icon: '💚', label: 'Health'       },
-            { icon: '📓', label: 'Journal'      },
-            { icon: '🎯', label: 'Focus Session' },
+            { icon: 'health',   label: 'Health'        },
+            { icon: 'journal',  label: 'Journal'       },
+            { icon: 'focus',    label: 'Focus Session' },
           ].map(item => (
             <div key={item.label} className="nav-item disabled" title={!showFull ? item.label : undefined}>
               <span className="nav-icon">{item.icon}</span>
-              {showFull && (
-                <>
-                  <span>{item.label}</span>
-                  <span className="soon">soon</span>
-                </>
-              )}
+              {showFull && <><span>{item.label}</span><span className="soon">soon</span></>}
             </div>
           ))}
         </div>
 
         <div className="sb-action-btns">
-          <button
-            className="sb-action-btn"
-            onClick={() => navTo('/account')}
-            title={!showFull ? 'Account' : undefined}
-          >
-            <span className="nav-icon">👤</span>
+          <button className="sb-action-btn" onClick={() => navTo('/account')}
+            title={!showFull ? 'Account' : undefined}>
+            <span className="nav-icon">user</span>
             {showFull && <span>Account</span>}
           </button>
-          <button
-            className="sb-action-btn"
-            onClick={() => navTo('/settings')}
-            title={!showFull ? 'Settings' : undefined}
-          >
-            <span className="nav-icon">⚙</span>
+          <button className="sb-action-btn" onClick={() => navTo('/settings')}
+            title={!showFull ? 'Settings' : undefined}>
+            <span className="nav-icon">cog</span>
             {showFull && <span>Settings</span>}
           </button>
         </div>
 
-        {/* Sidebar footer: XP bar */}
         <div className="sidebar-footer">
           <div className="xp-block">
             <div className="xp-top">
@@ -154,45 +191,33 @@ function AppShell({ user }) {
         </div>
       </nav>
 
-      {/* ── MAIN ── */}
       <main className="main">
         <Routes>
           <Route path="/"         element={<Routines userId={user?.id} />} />
           <Route path="/calendar" element={<Calendar userId={user?.id} />} />
+          <Route path="/tasks"    element={<Tasks    userId={user?.id} />} />
           <Route path="/settings" element={
-            <Settings
-              settings={settings}
-              onUpdate={updateSettings}
-              onBack={() => navigate('/')}
-            />
+            <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />
           <Route path="/account" element={
-            <div className="placeholder-page">
-              <button className="back-btn" onClick={() => navigate('/')}>← Back</button>
-              <h1>Account</h1>
-              <p style={{color:'var(--text2)', fontSize:14, marginBottom:'1.5rem'}}>{user?.email}</p>
-              <button className="btn-danger btn-sm" onClick={handleSignOut}>Sign out</button>
-            </div>
+            <AccountPage user={user} onSignOut={handleSignOut} onBack={() => navigate('/')} />
           } />
         </Routes>
       </main>
-
     </div>
   )
 }
 
 export default function App() {
-  const [user, setUser]           = useState(null)
+  const [user, setUser]               = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setAuthLoading(false)
     })
 
-    // Listen for auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
       if (event === 'SIGNED_IN') syncXPFromDb()
@@ -205,20 +230,15 @@ export default function App() {
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', background: 'var(--bg)', color: 'var(--text3)',
-        fontSize: 14
+        justifyContent: 'center', background: 'var(--bg)', color: 'var(--text3)', fontSize: 14
       }}>
-        Loading…
+        Loading...
       </div>
     )
   }
 
   if (!user) {
-    return (
-      <BrowserRouter>
-        <Auth />
-      </BrowserRouter>
-    )
+    return <BrowserRouter><Auth /></BrowserRouter>
   }
 
   return (

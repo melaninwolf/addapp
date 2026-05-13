@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { addXP } from '../xp'
 import { supabase } from '../supabase'
+import EmojiPicker from '../components/EmojiPicker'
 import './Routines.css'
 
 const SAMPLE_ROUTINES = [
@@ -115,7 +116,7 @@ function RoutineModal({ routine, onSave, onClose }) {
           <div className="form-row-inline">
             <div className="field" style={{width:52}}>
               <label>Icon</label>
-              <input value={emoji} onChange={e => setEmoji(e.target.value)} maxLength={2} className="emoji-input" />
+              <EmojiPicker value={emoji} onChange={setEmoji} />
             </div>
             <div className="field" style={{flex:1}}>
               <label>Routine name</label>

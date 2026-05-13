@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
 import { loadGIS, connectGoogle, silentReconnect, disconnectGoogle, fetchEvents, eventStartDate, eventTimeLabel, isConnected, getCachedToken } from '../googleCalendar'
+import EmojiPicker from '../components/EmojiPicker'
 import './Calendar.css'
 
 const SAMPLE_ROUTINES = [
@@ -34,6 +35,12 @@ function fmtTime(t) {
 function totalMins(steps) {
   if (!steps?.length) return 0
   return steps.reduce((a, s) => a + (s.dur || 0), 0)
+}
+
+function minsToTime(totalMins) {
+  const h = Math.floor(totalMins / 60) % 24
+  const m = totalMins % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 function getCalendarCells(year, month) {
@@ -74,6 +81,56 @@ function isSameDay(a, b) {
   return a.toDateString() === b.toDateString()
 }
 
+// ─── Timezone & date helpers ──────────────────────────────────
+function getUserTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+function formatDateForInput(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function parseDateLocal(str) {
+  if (!str) return null
+  const [y, mo, d] = str.split('-').map(Number)
+  return new Date(y, mo - 1, d)
+}
+
+// ─── Calendar event types ─────────────────────────────────────
+const EVENT_TYPES = [
+  { key: 'appointment', label: 'Appointment', emoji: '📅' },
+  { key: 'task',        label: 'Task',        emoji: '✅' },
+  { key: 'reminder',    label: 'Reminder',    emoji: '🔔' },
+  { key: 'event',       label: 'Event',       emoji: '🎉' },
+  { key: 'time_block',  label: 'Time Block',  emoji: '🧱', soon: true },
+]
+
+const REPEAT_OPTIONS = [
+  { key: 'none',    label: 'No repeat' },
+  { key: 'daily',   label: 'Daily' },
+  { key: 'weekly',  label: 'Weekly' },
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'yearly',  label: 'Yearly' },
+]
+
+const TYPE_BORDER = {
+  appointment: 'var(--accent)',
+  task:        'var(--green)',
+  reminder:    'var(--amber)',
+  event:       'var(--red)',
+  time_block:  'var(--text2)',
+}
+const TYPE_BG = {
+  appointment: 'var(--accent-glow)',
+  task:        'var(--green-bg)',
+  reminder:    'var(--amber-bg)',
+  event:       'var(--red-bg)',
+  time_block:  'var(--bg3)',
+}
+
 // ─── Shared nav ──────────────────────────────────────────────
 function CalNav({ onPrev, onNext, label }) {
   return (
@@ -101,7 +158,7 @@ function RoutineCard({ r }) {
   )
 }
 
-// ─── Google Calendar event card (Month detail + Week) ────────
+// ─── Google Calendar event card ───────────────────────────────
 function GCalEventCard({ event }) {
   const timeLabel = eventTimeLabel(event)
   return (
@@ -116,7 +173,7 @@ function GCalEventCard({ event }) {
 }
 
 // ─── MONTH VIEW ───────────────────────────────────────────────
-function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
+function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, onViewEvent }) {
   const [year,  setYear]  = useState(selected.getFullYear())
   const [month, setMonth] = useState(selected.getMonth())
 
@@ -129,9 +186,10 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
     else setMonth(m => m + 1)
   }
 
-  const cells    = getCalendarCells(year, month)
-  const selRout  = routinesForDate(selected)
-  const selGCal  = gcalEventsForDate(selected)
+  const cells      = getCalendarCells(year, month)
+  const selRout    = routinesForDate(selected)
+  const selGCal    = gcalEventsForDate(selected)
+  const selCustom  = customEventsForDate(selected)
 
   return (
     <div className="cal-month-layout">
@@ -146,7 +204,8 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
             const isSelected = isSameDay(date, selected)
             const dayRout    = routinesForDate(date)
             const dayGCal    = gcalEventsForDate(date)
-            const totalItems = dayRout.length + dayGCal.length
+            const dayCustom  = customEventsForDate(date)
+            const totalItems = dayRout.length + dayGCal.length + dayCustom.length
             return (
               <div
                 key={i}
@@ -155,16 +214,15 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
               >
                 <span className="cal-day-num">{date.getDate()}</span>
                 <div className="cal-day-pills">
-                  {dayGCal.slice(0, 1).map(e => (
-                    <div key={e.id} className="cal-pill cal-pill-gcal">
-                      <span className="cal-pill-emoji">📅</span>
-                      <span className="cal-pill-name">{e.summary || '(No title)'}</span>
-                    </div>
-                  ))}
-                  {dayRout.slice(0, dayGCal.length > 0 ? 1 : 2).map(r => (
-                    <div key={r.id} className="cal-pill">
-                      <span className="cal-pill-emoji">{r.emoji}</span>
-                      <span className="cal-pill-name">{r.name}</span>
+                  {[
+                    ...dayCustom.slice(0,1).map(e => ({ key:`c${e.id}`, emoji: e.emoji, name: e.title, cls:'cal-pill-custom', bc: TYPE_BORDER[e.type] })),
+                    ...dayGCal.slice(0,1).map(e   => ({ key:`g${e.id}`, emoji: '📅',   name: e.summary || '(No title)', cls:'cal-pill-gcal' })),
+                    ...dayRout.slice(0,1).map(r   => ({ key:`r${r.id}`, emoji: r.emoji, name: r.name, cls:'' })),
+                  ].slice(0, 2).map(item => (
+                    <div key={item.key} className={`cal-pill ${item.cls}`}
+                      style={item.bc ? { borderLeft:`2px solid ${item.bc}` } : {}}>
+                      <span className="cal-pill-emoji">{item.emoji}</span>
+                      <span className="cal-pill-name">{item.name}</span>
                     </div>
                   ))}
                   {totalItems > 2 && (
@@ -184,13 +242,28 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
           {isSameDay(selected, today) && <span className="cal-today-tag">Today</span>}
         </div>
 
-        {selRout.length === 0 && selGCal.length === 0 ? (
+        {selRout.length === 0 && selGCal.length === 0 && selCustom.length === 0 ? (
           <div className="cal-detail-empty">
             <span className="cal-empty-icon">🗓</span>
             <span>Nothing scheduled</span>
           </div>
         ) : (
           <div className="cal-detail-list">
+            {selCustom.map(e => (
+              <div key={e.id} className="cal-detail-item cal-detail-item-click"
+                style={{ borderLeft: `3px solid ${TYPE_BORDER[e.type] || 'var(--accent)'}` }}
+                onClick={() => onViewEvent && onViewEvent(e)}>
+                <div className="cdi-emoji" style={{ background: TYPE_BG[e.type] }}>{e.emoji}</div>
+                <div className="cdi-info">
+                  <div className="cdi-name">{e.title}</div>
+                  <div className="cdi-meta">
+                    {e.all_day ? 'All day' : [e.start_time && fmtTime(e.start_time), e.end_time && fmtTime(e.end_time)].filter(Boolean).join(' – ')}
+                    {e.location && <> · 📍 {e.location}</>}
+                  </div>
+                  {e.repeat_type && e.repeat_type !== 'none' && <span className="ec-trigger-tag">🔁 {e.repeat_type}</span>}
+                </div>
+              </div>
+            ))}
             {selGCal.map(e => (
               <div key={e.id} className="cal-detail-item gcal-detail-item">
                 <div className="cdi-emoji gcal-cdi-icon">📅</div>
@@ -221,7 +294,7 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
 }
 
 // ─── WEEK VIEW ────────────────────────────────────────────────
-function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
+function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate }) {
   const [anchor, setAnchor] = useState(() => new Date(selected))
   const weekDays = getWeekDays(anchor)
 
@@ -238,6 +311,7 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
           const isSelected = isSameDay(date, selected)
           const dayRout    = routinesForDate(date)
           const dayGCal    = gcalEventsForDate(date)
+          const dayCustom  = customEventsForDate(date)
           return (
             <div
               key={i}
@@ -251,6 +325,16 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                 </span>
               </div>
               <div className="week-col-body">
+                {dayCustom.map(e => (
+                  <div key={e.id} className="week-event"
+                    style={{ borderLeft: `2px solid ${TYPE_BORDER[e.type] || 'var(--accent)'}`, background: TYPE_BG[e.type] }}>
+                    <span className="we-emoji">{e.emoji}</span>
+                    <div className="we-body">
+                      <div className="we-name">{e.title}</div>
+                      {e.start_time && <div className="we-time">{fmtTime(e.start_time)}</div>}
+                    </div>
+                  </div>
+                ))}
                 {dayGCal.map(e => (
                   <div key={e.id} className="week-event week-event-gcal">
                     <span className="we-emoji">📅</span>
@@ -269,7 +353,7 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                     </div>
                   </div>
                 ))}
-                {dayRout.length === 0 && dayGCal.length === 0 && <div className="week-no-rout" />}
+                {dayRout.length === 0 && dayGCal.length === 0 && dayCustom.length === 0 && <div className="week-no-rout" />}
               </div>
             </div>
           )
@@ -279,14 +363,352 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
   )
 }
 
+// ─── Add / Edit Event Modal ───────────────────────────────────
+function AddEventModal({ open, onClose, onSave, onDelete, defaultDate, initialEvent }) {
+  const isEdit = !!initialEvent
+
+  const [type,          setType]          = useState('appointment')
+  const [title,         setTitle]         = useState('')
+  const [emoji,         setEmoji]         = useState('📅')
+  const [emojiTouched,  setEmojiTouched]  = useState(false)
+  const [date,          setDate]          = useState('')
+  const [endDate,       setEndDate]       = useState('')
+  const [allDay,        setAllDay]        = useState(false)
+  const [startTime,     setStartTime]     = useState('09:00')
+  const [endTime,       setEndTime]       = useState('10:00')
+  const [location,      setLocation]      = useState('')
+  const [notes,         setNotes]         = useState('')
+  const [repeatType,    setRepeatType]    = useState('none')
+  const [repeatDays,    setRepeatDays]    = useState([])
+  const [repeatEndDate, setRepeatEndDate] = useState('')
+  const [saving,        setSaving]        = useState(false)
+
+  // Initialise / reset when modal opens
+  useEffect(() => {
+    if (!open) return
+    if (initialEvent) {
+      setType(initialEvent.type || 'appointment')
+      setTitle(initialEvent.title || '')
+      setDate(initialEvent.date || formatDateForInput(new Date()))
+      setEndDate(initialEvent.end_date || initialEvent.date || formatDateForInput(new Date()))
+      setAllDay(initialEvent.all_day || false)
+      setStartTime(initialEvent.start_time || '09:00')
+      setEndTime(initialEvent.end_time || '10:00')
+      setLocation(initialEvent.location || '')
+      setNotes(initialEvent.notes || '')
+      setRepeatType(initialEvent.repeat_type || 'none')
+      setRepeatDays(initialEvent.repeat_days || [])
+      setRepeatEndDate(initialEvent.repeat_end_date || '')
+      setEmoji(initialEvent.emoji || EVENT_TYPES.find(t => t.key === initialEvent.type)?.emoji || '📌')
+      setEmojiTouched(true)
+    } else {
+      const d = formatDateForInput(defaultDate || new Date())
+      setDate(d); setEndDate(d)
+      setTitle(''); setType('appointment'); setAllDay(false)
+      setStartTime('09:00'); setEndTime('10:00')
+      setLocation(''); setNotes('')
+      setRepeatType('none'); setRepeatDays([]); setRepeatEndDate('')
+      setEmoji(EVENT_TYPES[0].emoji); setEmojiTouched(false)
+    }
+  }, [open, initialEvent, defaultDate])
+
+  // Auto-update emoji when type changes (unless user has manually picked one)
+  useEffect(() => {
+    if (!emojiTouched) {
+      setEmoji(EVENT_TYPES.find(t => t.key === type)?.emoji || '📌')
+    }
+  }, [type]) // eslint-disable-line
+
+  if (!open) return null
+
+  function toggleDay(key) {
+    setRepeatDays(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key])
+  }
+
+  async function handleSave() {
+    if (!title.trim() || saving) return
+    setSaving(true)
+    try {
+      await onSave({
+        type,
+        title:           title.trim(),
+        emoji,
+        date,
+        start_time:      allDay ? null : startTime || null,
+        end_time:        allDay ? null : endTime   || null,
+        end_date:        endDate && endDate !== date ? endDate : null,
+        all_day:         allDay,
+        location:        location.trim() || null,
+        notes:           notes.trim()    || null,
+        repeat_type:     repeatType,
+        repeat_days:     repeatDays,
+        repeat_end_date: repeatEndDate   || null,
+        timezone:        getUserTimezone(),
+      })
+      onClose()
+    } finally { setSaving(false) }
+  }
+
+  const showLocation = type === 'appointment' || type === 'event'
+  const isComingSoon = type === 'time_block'
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="modal-header">
+          <span className="modal-title-text">{isEdit ? 'Edit event' : 'Add to calendar'}</span>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Type grid */}
+        <div className="modal-type-grid">
+          {EVENT_TYPES.map(t => (
+            <button
+              key={t.key}
+              className={`modal-type-btn${type === t.key ? ' active' : ''}${t.soon ? ' soon' : ''}`}
+              onClick={() => !t.soon && setType(t.key)}
+            >
+              <span className="mtb-emoji">{t.emoji}</span>
+              <span className="mtb-label">{t.label}</span>
+              {t.soon && <span className="mtb-soon">Soon</span>}
+            </button>
+          ))}
+        </div>
+
+        <div className="modal-body">
+          {/* Emoji + title */}
+          <div className="modal-row" style={{ alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label className="modal-label">Icon</label>
+              <EmojiPicker
+                value={emoji}
+                onChange={v => { setEmoji(v); setEmojiTouched(true) }}
+              />
+            </div>
+            <div className="modal-field" style={{ flex: 1 }}>
+              <label className="modal-label">Title</label>
+              <input
+                className="modal-input modal-title-input"
+                placeholder={`${EVENT_TYPES.find(t => t.key === type)?.label || 'Event'} title`}
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSave()}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          {/* Date + all-day */}
+          <div className="modal-row">
+            <div className="modal-field" style={{ flex: 1 }}>
+              <label className="modal-label">Date</label>
+              <input type="date" className="modal-input" value={date}
+                onChange={e => setDate(e.target.value)} />
+            </div>
+            <button
+              className={`modal-allday-btn${allDay ? ' on' : ''}`}
+              onClick={() => setAllDay(v => !v)}
+            >All day</button>
+          </div>
+
+          {/* Times + end date */}
+          {!allDay && (
+            <div className="modal-row">
+              <div className="modal-field" style={{ flex: 1 }}>
+                <label className="modal-label">Start</label>
+                <input type="time" className="modal-input" value={startTime}
+                  onChange={e => setStartTime(e.target.value)} />
+              </div>
+              <div className="modal-field" style={{ flex: 1.6 }}>
+                <label className="modal-label">End</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input type="date" className="modal-input" value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    min={date} style={{ flex: 1 }} />
+                  <input type="time" className="modal-input" value={endTime}
+                    onChange={e => setEndTime(e.target.value)} style={{ flex: 1 }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* All-day end date */}
+          {allDay && (
+            <div className="modal-row">
+              <div className="modal-field" style={{ flex: 1 }}>
+                <label className="modal-label">End date</label>
+                <input type="date" className="modal-input" value={endDate}
+                  onChange={e => setEndDate(e.target.value)} min={date} />
+              </div>
+            </div>
+          )}
+
+          {/* Location */}
+          {showLocation && (
+            <input className="modal-input" placeholder="Location (optional)"
+              value={location} onChange={e => setLocation(e.target.value)} />
+          )}
+
+          {/* Repeat */}
+          <div className="modal-repeat-section">
+            <div className="modal-label" style={{ marginBottom: 8 }}>🔁 Repeat</div>
+            <div className="modal-repeat-opts">
+              {REPEAT_OPTIONS.map(o => (
+                <button key={o.key}
+                  className={`modal-repeat-opt${repeatType === o.key ? ' active' : ''}`}
+                  onClick={() => setRepeatType(o.key)}
+                >{o.label}</button>
+              ))}
+            </div>
+
+            {repeatType === 'weekly' && (
+              <div className="modal-days-row">
+                {DOW_SHORT.map((d, i) => {
+                  const key = DOW_KEYS[i]
+                  const on  = repeatDays.includes(key)
+                  return (
+                    <button key={key}
+                      className={`modal-day-btn${on ? ' active' : ''}`}
+                      onClick={() => toggleDay(key)}
+                    >{d.slice(0,1)}</button>
+                  )
+                })}
+              </div>
+            )}
+
+            {repeatType !== 'none' && (
+              <div className="modal-field" style={{ marginTop: 10 }}>
+                <label className="modal-label">Ends on (optional)</label>
+                <input type="date" className="modal-input" style={{ maxWidth: 180 }}
+                  value={repeatEndDate} onChange={e => setRepeatEndDate(e.target.value)} />
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <textarea className="modal-input modal-textarea"
+            placeholder="Notes (optional)" rows={2}
+            value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+
+        {/* Footer */}
+        <div className="modal-footer">
+          {isEdit && onDelete && (
+            <button className="modal-btn modal-btn-delete" onClick={() => onDelete()}>
+              Delete
+            </button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button className="modal-btn modal-btn-cancel" onClick={onClose}>Cancel</button>
+          <button className="modal-btn modal-btn-save"
+            onClick={handleSave}
+            disabled={!title.trim() || saving || isComingSoon}
+          >{saving ? 'Saving…' : isEdit ? 'Update' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Event Detail Popup ───────────────────────────────────────
+function EventDetailModal({ event, onClose, onEdit, onDelete }) {
+  if (!event) return null
+  const typeInfo = EVENT_TYPES.find(t => t.key === event.type) || EVENT_TYPES[0]
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-sheet modal-sheet-detail" onClick={e => e.stopPropagation()}>
+
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="detail-emoji-bubble" style={{ background: TYPE_BG[event.type] }}>
+              {event.emoji}
+            </div>
+            <div>
+              <div className="modal-title-text" style={{ fontSize: 16 }}>{event.title}</div>
+              <div className="detail-type-tag" style={{ borderColor: TYPE_BORDER[event.type], color: TYPE_BORDER[event.type] }}>
+                {typeInfo.emoji} {typeInfo.label}
+              </div>
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="modal-body">
+          {/* Date */}
+          <div className="detail-row">
+            <span className="detail-icon">📅</span>
+            <div className="detail-val">
+              {parseDateLocal(event.date)?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {event.end_date && event.end_date !== event.date && (
+                <> → {parseDateLocal(event.end_date)?.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</>
+              )}
+            </div>
+          </div>
+
+          {/* Time */}
+          {event.all_day ? (
+            <div className="detail-row">
+              <span className="detail-icon">⏰</span>
+              <div className="detail-val">All day</div>
+            </div>
+          ) : (event.start_time || event.end_time) && (
+            <div className="detail-row">
+              <span className="detail-icon">⏰</span>
+              <div className="detail-val">
+                {[event.start_time && fmtTime(event.start_time), event.end_time && fmtTime(event.end_time)].filter(Boolean).join(' → ')}
+              </div>
+            </div>
+          )}
+
+          {/* Location */}
+          {event.location && (
+            <div className="detail-row">
+              <span className="detail-icon">📍</span>
+              <div className="detail-val">{event.location}</div>
+            </div>
+          )}
+
+          {/* Repeat */}
+          {event.repeat_type && event.repeat_type !== 'none' && (
+            <div className="detail-row">
+              <span className="detail-icon">🔁</span>
+              <div className="detail-val">
+                Repeats {event.repeat_type}
+                {event.repeat_end_date && ` until ${parseDateLocal(event.repeat_end_date)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {event.notes && (
+            <div className="detail-row">
+              <span className="detail-icon">📝</span>
+              <div className="detail-val detail-notes">{event.notes}</div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="modal-btn modal-btn-delete" onClick={() => onDelete(event.id)}>
+            Delete
+          </button>
+          <div style={{ flex: 1 }} />
+          <button className="modal-btn modal-btn-cancel" onClick={onClose}>Close</button>
+          <button className="modal-btn modal-btn-save" onClick={() => onEdit(event)}>Edit</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Overlap layout ───────────────────────────────────────────
-// Groups overlapping events and assigns each a column index so
-// they can be rendered side-by-side instead of on top of each other.
 function layoutEvents(blocks) {
   if (!blocks.length) return []
   const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin)
 
-  // Split into non-overlapping clusters
   const clusters = []
   let cluster = [sorted[0]]
   let clusterEnd = sorted[0].startMin + sorted[0].durMin
@@ -306,7 +728,7 @@ function layoutEvents(blocks) {
 
   const layoutMap = new Map()
   for (const grp of clusters) {
-    const colEnds = []  // colEnds[i] = minute at which column i becomes free
+    const colEnds = []
     const assignments = []
     for (const b of grp) {
       let col = colEnds.findIndex(end => end <= b.startMin)
@@ -332,38 +754,41 @@ function hourLabel(h) {
   return `${h - 12} PM`
 }
 
-function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate }) {
+function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, onUpdateEvent, onViewEvent }) {
   const [now, setNow] = useState(() => new Date())
   const scrollRef = useRef(null)
+  const dragRef   = useRef(null)
+  const [dragVis, setDragVis] = useState(null) // { eventId, startMin, durMin, emoji, title, subtype }
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000)
     return () => clearInterval(id)
   }, [])
 
-  // Scroll to 1 hour before now (today) or 7 AM (other days) on mount/date change
   useEffect(() => {
     if (!scrollRef.current) return
     const isToday = isSameDay(selected, today)
     const scrollHour = isToday ? Math.max(0, now.getHours() - 1) : 7
     scrollRef.current.scrollTop = scrollHour * PX_PER_HOUR
-  }, [selected])
+  }, [selected]) // eslint-disable-line
 
   function prev() { const d = new Date(selected); d.setDate(d.getDate() - 1); setSelected(d) }
   function next() { const d = new Date(selected); d.setDate(d.getDate() + 1); setSelected(d) }
 
-  const isToday    = isSameDay(selected, today)
-  const dayRout    = routinesForDate(selected)
-  const dayGCal    = gcalEventsForDate(selected)
-  const timedRout  = dayRout.filter(r => r.time)
-  const flexRout   = dayRout.filter(r => !r.time)
-  const timedGCal  = dayGCal.filter(e => e.start?.dateTime)
-  const alldayGCal = dayGCal.filter(e => e.start?.date && !e.start?.dateTime)
+  const isToday      = isSameDay(selected, today)
+  const nowMin       = isToday ? (now.getHours() * 60 + now.getMinutes()) : -1
+  const dayRout      = routinesForDate(selected)
+  const dayGCal      = gcalEventsForDate(selected)
+  const dayCustom    = customEventsForDate(selected)
+  const timedRout    = dayRout.filter(r => r.time)
+  const flexRout     = dayRout.filter(r => !r.time)
+  const timedGCal    = dayGCal.filter(e => e.start?.dateTime)
+  const alldayGCal   = dayGCal.filter(e => e.start?.date && !e.start?.dateTime)
+  const timedCustom  = dayCustom.filter(e => !e.all_day && e.start_time)
+  const alldayCustom = dayCustom.filter(e => e.all_day || !e.start_time)
 
-  // Now-line position (pixels from midnight)
   const nowTop = (now.getHours() + now.getMinutes() / 60) * PX_PER_HOUR
 
-  // Build positioned event blocks with overlap columns
   const rawBlocks = [
     ...timedRout.map(r => {
       const [h, m] = r.time.split(':').map(Number)
@@ -378,8 +803,87 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
       const durMin   = Math.max(30, Math.round((end - start) / 60000))
       return { type: 'gcal', startMin, durMin, data: e, key: `g-${e.id}` }
     }),
+    ...timedCustom.map(e => {
+      const [h, m]   = e.start_time.split(':').map(Number)
+      const startMin = h * 60 + m
+      let durMin = 60
+      if (e.end_time) {
+        const [eh, em] = e.end_time.split(':').map(Number)
+        durMin = Math.max(30, (eh * 60 + em) - startMin)
+      }
+      return { type: 'custom', subtype: e.type, startMin, durMin, data: e, key: `c-${e.id}` }
+    }),
   ]
   const eventBlocks = layoutEvents(rawBlocks)
+
+  // ── Drag handlers ──────────────────────────────────────────
+  function onBlockMouseDown(e, block) {
+    if (block.type !== 'custom') return
+    e.preventDefault()
+    e.stopPropagation()
+
+    const scrollEl  = scrollRef.current
+    const gridRect  = scrollEl.getBoundingClientRect()
+    const scrollTop = scrollEl.scrollTop
+    const yInGrid   = e.clientY - gridRect.top + scrollTop
+    const offsetMin = Math.max(0, (yInGrid / PX_PER_HOUR) * 60 - block.startMin)
+
+    const info = {
+      eventId: block.data.id,
+      durMin: block.durMin,
+      originalStartMin: block.startMin,
+      offsetMin,
+      currentStartMin: block.startMin,
+      data: block.data,
+      subtype: block.subtype,
+      moved: false,
+    }
+    dragRef.current = info
+    setDragVis({
+      eventId: block.data.id,
+      startMin: block.startMin,
+      durMin: block.durMin,
+      emoji: block.data.emoji,
+      title: block.data.title,
+      subtype: block.subtype,
+    })
+
+    function onMove(ev) {
+      const rect  = scrollEl.getBoundingClientRect()
+      const sTop  = scrollEl.scrollTop
+      const y     = ev.clientY - rect.top + sTop
+      const raw   = (y / PX_PER_HOUR) * 60 - dragRef.current.offsetMin
+      const snap  = Math.round(raw / 15) * 15
+      const clamp = Math.max(0, Math.min(1440 - dragRef.current.durMin, snap))
+      if (Math.abs(clamp - dragRef.current.originalStartMin) > 5) {
+        dragRef.current.moved = true
+      }
+      dragRef.current.currentStartMin = clamp
+      setDragVis(v => v ? { ...v, startMin: clamp } : null)
+    }
+
+    function onUp() {
+      const d = dragRef.current
+      if (d) {
+        if (!d.moved) {
+          // It was a tap/click — open detail view
+          onViewEvent && onViewEvent(d.data)
+        } else if (d.currentStartMin !== d.originalStartMin) {
+          onUpdateEvent && onUpdateEvent(d.eventId, {
+            start_time: minsToTime(d.currentStartMin),
+            end_time:   minsToTime(d.currentStartMin + d.durMin),
+          })
+        }
+      }
+      dragRef.current = null
+      setDragVis(null)
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   const dateLabel = (
     <>
@@ -392,12 +896,26 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
     <div className="cal-day-layout">
       <CalNav onPrev={prev} onNext={next} label={dateLabel} />
 
-      {/* All-day & flexible chips */}
-      {(alldayGCal.length > 0 || flexRout.length > 0) && (
+      {/* All-day / flexible chips */}
+      {(alldayGCal.length > 0 || flexRout.length > 0 || alldayCustom.length > 0) && (
         <div className="day-header-section">
-          {alldayGCal.length > 0 && (
+          {alldayCustom.length > 0 && (
             <div className="day-allday-row">
               <div className="day-time-col-label">All day</div>
+              <div className="day-chips">
+                {alldayCustom.map(e => (
+                  <div key={e.id} className="day-chip"
+                    style={{ background: TYPE_BG[e.type], borderColor: TYPE_BORDER[e.type], color: TYPE_BORDER[e.type], cursor: 'pointer' }}
+                    onClick={() => onViewEvent && onViewEvent(e)}>
+                    {e.emoji} {e.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {alldayGCal.length > 0 && (
+            <div className="day-allday-row">
+              <div className="day-time-col-label">{alldayCustom.length === 0 ? 'All day' : ''}</div>
               <div className="day-chips">
                 {alldayGCal.map(e => (
                   <div key={e.id} className="day-chip day-chip-gcal">📅 {e.summary || '(No title)'}</div>
@@ -422,7 +940,6 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
       <div className="day-grid-scroll" ref={scrollRef}>
         <div className="day-grid" style={{ height: `${24 * PX_PER_HOUR}px` }}>
 
-          {/* Hour rows */}
           {HOURS.map(h => (
             <div key={h} className="day-hour-row" style={{ top: h * PX_PER_HOUR }}>
               <div className="day-hour-label">{hourLabel(h)}</div>
@@ -430,7 +947,6 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
             </div>
           ))}
 
-          {/* Events */}
           <div className="day-events-col">
             {eventBlocks.map(block => {
               const top      = (block.startMin / 60) * PX_PER_HOUR
@@ -439,11 +955,37 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
               const pct      = 100 / block.totalCols
               const colLeft  = `calc(${block.col * pct}% + 4px)`
               const colWidth = `calc(${pct}% - 8px)`
+
+              // Past / missed state
+              const blockEnd = block.startMin + block.durMin
+              const isPast   = nowMin >= 0 && blockEnd <= nowMin
+              const isMissed = isPast && (block.type === 'routine' || (block.type === 'custom' && block.subtype === 'task'))
+              const pastCls  = isMissed ? ' ev-missed' : isPast ? ' ev-past' : ''
+
+              // Whether this block is being dragged
+              const isDragging = dragVis?.eventId === block.data?.id && block.type === 'custom'
+
+              // Custom event style overrides
+              const customStyle = (block.type === 'custom' && !isMissed) ? {
+                background:      TYPE_BG[block.subtype]     || 'var(--bg3)',
+                borderColor:     TYPE_BORDER[block.subtype] || 'var(--accent)',
+                borderLeftColor: TYPE_BORDER[block.subtype] || 'var(--accent)',
+              } : {}
+
               return (
                 <div
                   key={block.key}
-                  className={`day-event-block${block.type === 'gcal' ? ' day-event-gcal' : ' day-event-routine'}`}
-                  style={{ top, height, left: colLeft, width: colWidth, right: 'auto' }}
+                  className={[
+                    'day-event-block',
+                    block.type === 'gcal'   ? 'day-event-gcal'    :
+                    block.type === 'custom' ? 'day-event-custom'  : 'day-event-routine',
+                    pastCls,
+                    isDragging ? 'ev-dragging' : '',
+                    block.type === 'custom' ? 'ev-draggable' : '',
+                  ].filter(Boolean).join(' ')}
+                  style={{ top, height, left: colLeft, width: colWidth, right: 'auto', ...customStyle }}
+                  onMouseDown={block.type === 'custom' ? e => onBlockMouseDown(e, block) : undefined}
+                  onClick={block.type !== 'custom' ? () => onViewEvent && onViewEvent(block.data) : undefined}
                 >
                   {block.type === 'routine' ? (
                     <>
@@ -458,7 +1000,7 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                         )}
                       </div>
                     </>
-                  ) : (
+                  ) : block.type === 'gcal' ? (
                     <>
                       <span className="deb-emoji">📅</span>
                       <div className="deb-body">
@@ -468,10 +1010,45 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                         )}
                       </div>
                     </>
+                  ) : (
+                    <>
+                      <span className="deb-emoji">{block.data.emoji}</span>
+                      <div className="deb-body">
+                        <div className="deb-name">{block.data.title}</div>
+                        {!isShort && block.data.location && (
+                          <div className="deb-meta">📍 {block.data.location}</div>
+                        )}
+                        {!isShort && block.data.notes && (
+                          <div className="deb-meta">{block.data.notes}</div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               )
             })}
+
+            {/* Drag ghost */}
+            {dragVis && (
+              <div
+                className="day-event-block day-event-custom ev-ghost"
+                style={{
+                  top:    (dragVis.startMin / 60) * PX_PER_HOUR,
+                  height: Math.max(24, (dragVis.durMin / 60) * PX_PER_HOUR - 2),
+                  left: 6, right: 6,
+                  background:      TYPE_BG[dragVis.subtype]     || 'var(--bg3)',
+                  borderColor:     TYPE_BORDER[dragVis.subtype] || 'var(--accent)',
+                  borderLeftColor: TYPE_BORDER[dragVis.subtype] || 'var(--accent)',
+                  pointerEvents: 'none',
+                }}
+              >
+                <span className="deb-emoji">{dragVis.emoji}</span>
+                <div className="deb-body">
+                  <div className="deb-name">{dragVis.title}</div>
+                  <div className="deb-meta">{fmtTime(minsToTime(dragVis.startMin))}</div>
+                </div>
+              </div>
+            )}
 
             {/* Now line */}
             {isToday && (
@@ -490,10 +1067,14 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
 // ─── ROOT ─────────────────────────────────────────────────────
 export default function Calendar({ userId }) {
   const today = new Date()
-  const [view,        setView]        = useState('day')
-  const [selected,    setSelected]    = useState(today)
-  const [routines,    setRoutines]    = useState([])
-  const [loading,     setLoading]     = useState(!!userId)
+  const [view,           setView]          = useState('day')
+  const [selected,       setSelected]      = useState(today)
+  const [routines,       setRoutines]      = useState([])
+  const [loading,        setLoading]       = useState(!!userId)
+  const [calEvents,      setCalEvents]     = useState([])
+  const [showAddModal,   setShowAddModal]  = useState(false)
+  const [viewingEvent,   setViewingEvent]  = useState(null)
+  const [editingEvent,   setEditingEvent]  = useState(null)
 
   // Google Calendar state
   const [gisReady,    setGisReady]    = useState(false)
@@ -502,22 +1083,30 @@ export default function Calendar({ userId }) {
   const [gcalLoading, setGcalLoading] = useState(false)
   const [gcalError,   setGcalError]   = useState('')
 
-  // Load GIS script on mount, then silently reconnect if previously connected
   useEffect(() => {
     if (!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
         import.meta.env.VITE_GOOGLE_CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE') return
 
     loadGIS().then(() => {
       setGisReady(true)
-      // If user has connected before, silently get a fresh token
       if (isConnected()) {
         silentReconnect(
           (token) => { setGcalToken(token); fetchGcalEvents(token) },
-          ()      => { setGcalToken(null) } // silent fail — show connect button
+          ()      => { setGcalToken(null) }
         )
       }
     }).catch(() => {})
   }, [])
+
+  // Load calendar events from Supabase
+  useEffect(() => {
+    if (!userId) return
+    supabase
+      .from('calendar_events')
+      .select('*')
+      .eq('user_id', userId)
+      .then(({ data, error }) => { if (!error && data) setCalEvents(data) })
+  }, [userId])
 
   // Load routines
   useEffect(() => {
@@ -534,7 +1123,6 @@ export default function Calendar({ userId }) {
       })
   }, [userId])
 
-  // Fetch Google Calendar events (~3 month window around today)
   const fetchGcalEvents = useCallback(async (token) => {
     setGcalLoading(true)
     setGcalError('')
@@ -545,15 +1133,12 @@ export default function Calendar({ userId }) {
       setGcalEvents(events)
     } catch (err) {
       if (err.message === 'TOKEN_EXPIRED') {
-        setGcalToken(null)
-        setGcalEvents([])
+        setGcalToken(null); setGcalEvents([])
         setGcalError('Google Calendar session expired. Reconnect to refresh.')
       } else {
         setGcalError('Could not load Google Calendar events.')
       }
-    } finally {
-      setGcalLoading(false)
-    }
+    } finally { setGcalLoading(false) }
   }, [])
 
   function connectGcal() {
@@ -566,9 +1151,7 @@ export default function Calendar({ userId }) {
 
   function disconnectGcal() {
     disconnectGoogle(gcalToken)
-    setGcalToken(null)
-    setGcalEvents([])
-    setGcalError('')
+    setGcalToken(null); setGcalEvents([]); setGcalError('')
   }
 
   function routinesForDate(date) {
@@ -576,6 +1159,73 @@ export default function Calendar({ userId }) {
     return routines
       .filter(r => r.days?.includes(dow))
       .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'))
+  }
+
+  function customEventsForDate(date) {
+    const normDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    return calEvents.filter(e => {
+      const eventDate = parseDateLocal(e.date)
+      if (!eventDate) return false
+
+      if (!e.repeat_type || e.repeat_type === 'none') {
+        const endDateVal = e.end_date ? parseDateLocal(e.end_date) : eventDate
+        return normDate >= eventDate && normDate <= endDateVal
+      }
+      if (date < eventDate) return false
+      if (e.repeat_end_date) {
+        const endDate = parseDateLocal(e.repeat_end_date)
+        if (endDate && date > endDate) return false
+      }
+      const dow = DOW_KEYS[date.getDay()]
+      switch (e.repeat_type) {
+        case 'daily':   return true
+        case 'weekly':
+          return e.repeat_days?.length > 0
+            ? e.repeat_days.includes(dow)
+            : date.getDay() === eventDate.getDay()
+        case 'monthly': return date.getDate() === eventDate.getDate()
+        case 'yearly':  return date.getDate() === eventDate.getDate() &&
+                               date.getMonth() === eventDate.getMonth()
+        default:        return false
+      }
+    })
+  }
+
+  // ── CRUD ─────────────────────────────────────────────────────
+  async function saveCalendarEvent(payload) {
+    if (!userId) return
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .insert([{ ...payload, user_id: userId }])
+      .select()
+    if (!error && data) setCalEvents(prev => [...prev, ...data])
+  }
+
+  async function updateCalendarEvent(id, payload) {
+    if (!userId) return
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .update(payload)
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select()
+    if (!error && data) {
+      setCalEvents(prev => prev.map(e => e.id === id ? { ...e, ...data[0] } : e))
+    }
+  }
+
+  async function deleteCalendarEvent(id) {
+    if (!userId) return
+    const { error } = await supabase
+      .from('calendar_events')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId)
+    if (!error) {
+      setCalEvents(prev => prev.filter(e => e.id !== id))
+      setViewingEvent(null)
+      setEditingEvent(null)
+    }
   }
 
   function gcalEventsForDate(date) {
@@ -587,6 +1237,15 @@ export default function Calendar({ userId }) {
       const tb = b.start?.dateTime || b.start?.date || ''
       return ta.localeCompare(tb)
     })
+  }
+
+  // Open detail from DayView (routines/gcal are read-only — no edit)
+  function handleViewEvent(eventOrRoutine) {
+    // Only show the full detail modal for custom calendar events
+    if (eventOrRoutine.title !== undefined) {
+      setViewingEvent(eventOrRoutine)
+    }
+    // Routines & gcal events — could add a read-only popup later
   }
 
   const VIEWS = ['Day', 'Week', 'Month']
@@ -601,31 +1260,26 @@ export default function Calendar({ userId }) {
           <p className="page-sub">Your routines and events in one place.</p>
         </div>
         <div className="cal-header-right">
-          {/* Google Calendar connect/disconnect */}
+          <button className="cal-add-btn" onClick={() => setShowAddModal(true)}>+ Add</button>
+
           {gcalConnected ? (
             <button className="gcal-btn gcal-btn-connected" onClick={disconnectGcal}>
               <span className="gcal-dot connected" />
               Google Calendar
             </button>
           ) : (
-            <button
-              className="gcal-btn"
-              onClick={connectGcal}
+            <button className="gcal-btn" onClick={connectGcal}
               disabled={gcalLoading || !gisReady}
-              title={!gisReady ? 'Loading Google…' : 'Connect Google Calendar'}
-            >
+              title={!gisReady ? 'Loading Google…' : 'Connect Google Calendar'}>
               {gcalLoading ? 'Connecting…' : '+ Google Calendar'}
             </button>
           )}
 
-          {/* View switcher */}
           <div className="cal-view-switcher">
             {VIEWS.map(v => (
-              <button
-                key={v}
+              <button key={v}
                 className={`cal-view-btn${view === v.toLowerCase() ? ' active' : ''}`}
-                onClick={() => setView(v.toLowerCase())}
-              >
+                onClick={() => setView(v.toLowerCase())}>
                 {v}
               </button>
             ))}
@@ -633,9 +1287,7 @@ export default function Calendar({ userId }) {
         </div>
       </div>
 
-      {gcalError && (
-        <div className="gcal-error">{gcalError}</div>
-      )}
+      {gcalError && <div className="gcal-error">{gcalError}</div>}
 
       {loading ? (
         <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'40vh', color:'var(--text3)', fontSize:14 }}>
@@ -643,15 +1295,44 @@ export default function Calendar({ userId }) {
         </div>
       ) : view === 'month' ? (
         <MonthView today={today} selected={selected} setSelected={setSelected}
-          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate} />
+          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
+          customEventsForDate={customEventsForDate} onViewEvent={handleViewEvent} />
       ) : view === 'week' ? (
         <WeekView  today={today} selected={selected} setSelected={setSelected}
-          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate} />
+          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
+          customEventsForDate={customEventsForDate} />
       ) : (
         <DayView   today={today} selected={selected} setSelected={setSelected}
-          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate} />
+          routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
+          customEventsForDate={customEventsForDate}
+          onUpdateEvent={updateCalendarEvent}
+          onViewEvent={handleViewEvent} />
       )}
 
+      {/* Add modal */}
+      <AddEventModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSave={saveCalendarEvent}
+        defaultDate={selected}
+      />
+
+      {/* Detail popup */}
+      <EventDetailModal
+        event={viewingEvent}
+        onClose={() => setViewingEvent(null)}
+        onEdit={e => { setViewingEvent(null); setEditingEvent(e) }}
+        onDelete={deleteCalendarEvent}
+      />
+
+      {/* Edit modal */}
+      <AddEventModal
+        open={!!editingEvent}
+        onClose={() => setEditingEvent(null)}
+        onSave={payload => updateCalendarEvent(editingEvent.id, payload)}
+        onDelete={() => deleteCalendarEvent(editingEvent.id)}
+        initialEvent={editingEvent}
+      />
     </div>
   )
 }
