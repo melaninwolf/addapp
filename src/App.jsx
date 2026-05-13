@@ -33,7 +33,7 @@ function AccountPage({ user, onSignOut, onBack }) {
 
   return (
     <div className="placeholder-page">
-      <button className="back-btn" onClick={onBack}>Back</button>
+      <button className="back-btn" onClick={onBack}>← Back</button>
       <h1>Account</h1>
       <p style={{ color:'var(--text2)', fontSize:14, marginBottom:'2rem' }}>{user?.email}</p>
 
@@ -58,7 +58,7 @@ function AccountPage({ user, onSignOut, onBack }) {
             style={{ padding:'9px 16px', borderRadius:8, background:'var(--accent)',
                      color:'#fff', fontWeight:600, fontSize:14, border:'none',
                      cursor:'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Saving...' : 'Update password'}
+            {saving ? 'Saving…' : 'Update password'}
           </button>
         </form>
       </div>
@@ -114,9 +114,7 @@ function AppShell({ user }) {
     <div className={`layout${collapsed ? ' sb-collapsed' : ''}${drawerOpen ? ' sb-open' : ''}`}>
 
       <div className="mobile-header">
-        <button className="hamburger-btn" onClick={() => setDrawerOpen(d => !d)} aria-label="Open menu">
-          hamburger
-        </button>
+        <button className="hamburger-btn" onClick={() => setDrawerOpen(d => !d)} aria-label="Open menu">☰</button>
         <div className="logo">add<span>app</span></div>
       </div>
 
@@ -127,7 +125,7 @@ function AppShell({ user }) {
           {showFull && <div className="logo">add<span>app</span></div>}
           <button className="sb-toggle" onClick={() => setCollapsed(c => !c)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-            {collapsed ? '>' : '<'}
+            {collapsed ? '▶' : '◀'}
           </button>
         </div>
 
@@ -135,28 +133,28 @@ function AppShell({ user }) {
           <NavLink to="/" end
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
             title={!showFull ? 'Routines' : undefined} onClick={closeDrawer}>
-            <span className="nav-icon">bolt</span>
+            <span className="nav-icon">⚡</span>
             {showFull && <span>Routines</span>}
           </NavLink>
 
           <NavLink to="/calendar"
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
             title={!showFull ? 'Calendar' : undefined} onClick={closeDrawer}>
-            <span className="nav-icon">cal</span>
+            <span className="nav-icon">📅</span>
             {showFull && <span>Calendar</span>}
           </NavLink>
 
           <NavLink to="/tasks"
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
             title={!showFull ? 'Tasks' : undefined} onClick={closeDrawer}>
-            <span className="nav-icon">check</span>
+            <span className="nav-icon">✅</span>
             {showFull && <span>Tasks</span>}
           </NavLink>
 
           {[
-            { icon: 'health',   label: 'Health'        },
-            { icon: 'journal',  label: 'Journal'       },
-            { icon: 'focus',    label: 'Focus Session' },
+            { icon: '💚', label: 'Health'        },
+            { icon: '📓', label: 'Journal'       },
+            { icon: '🎯', label: 'Focus Session' },
           ].map(item => (
             <div key={item.label} className="nav-item disabled" title={!showFull ? item.label : undefined}>
               <span className="nav-icon">{item.icon}</span>
@@ -168,12 +166,12 @@ function AppShell({ user }) {
         <div className="sb-action-btns">
           <button className="sb-action-btn" onClick={() => navTo('/account')}
             title={!showFull ? 'Account' : undefined}>
-            <span className="nav-icon">user</span>
+            <span className="nav-icon">👤</span>
             {showFull && <span>Account</span>}
           </button>
           <button className="sb-action-btn" onClick={() => navTo('/settings')}
             title={!showFull ? 'Settings' : undefined}>
-            <span className="nav-icon">cog</span>
+            <span className="nav-icon">⚙</span>
             {showFull && <span>Settings</span>}
           </button>
         </div>
