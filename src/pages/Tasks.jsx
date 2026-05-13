@@ -92,13 +92,11 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
         </div>
 
         <div className="modal-body">
-          {/* Title */}
           <input className="modal-input" style={{ fontSize: 15, fontWeight: 600 }}
             placeholder="Task title" value={title}
             onChange={e => setTitle(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSave()} autoFocus />
 
-          {/* Priority */}
           <div className="modal-field">
             <label className="modal-label">Priority</label>
             <div className="pri-picker">
@@ -115,7 +113,6 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
             </div>
           </div>
 
-          {/* Status + Category */}
           <div className="modal-row" style={{ gap: 8 }}>
             <div className="modal-field" style={{ flex: 1 }}>
               <label className="modal-label">Status</label>
@@ -132,14 +129,12 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
             </div>
           </div>
 
-          {/* Due date */}
           <div className="modal-field">
             <label className="modal-label">Due date</label>
             <input type="date" className="modal-input" value={dueDate}
               onChange={e => setDueDate(e.target.value)} style={{ maxWidth: 200 }} />
           </div>
 
-          {/* Notes */}
           <textarea className="modal-input modal-textarea"
             placeholder="Notes (optional)" rows={3}
             value={notes} onChange={e => setNotes(e.target.value)} />
@@ -228,7 +223,6 @@ function KanbanColumn({ status, tasks, categories, onAddTask, onEdit, onToggleDo
       <div className="kb-col-body">
         {colTasks.map(task => (
           <div key={task.id}>
-            {/* Drop indicator before this card */}
             {dragId && isActive && dragTarget.insertBeforeId === task.id && (
               <div className="kb-drop-line" />
             )}
@@ -248,7 +242,6 @@ function KanbanColumn({ status, tasks, categories, onAddTask, onEdit, onToggleDo
           </div>
         ))}
 
-        {/* Drop indicator at end */}
         {dragId && isActive && dragTarget.insertBeforeId === null && (
           <div className="kb-drop-line" />
         )}
@@ -300,7 +293,6 @@ export default function Tasks({ userId }) {
     setLoading(false)
   }
 
-  // ── CRUD ─────────────────────────────────────────────────────
   async function saveTask(payload) {
     if (!userId) return
     if (editingTask) {
@@ -330,6 +322,11 @@ export default function Tasks({ userId }) {
       .eq('id', id).eq('user_id', userId)
   }
 
+  function handleToggleDone(task) {
+    const newStatus = task.status === 'done' ? 'todo' : 'done'
+    updateTaskField(task.id, { status: newStatus })
+  }
+
   async function addCategory(name) {
     if (!name.trim()) return
     const maxOrder = categories.reduce((m, c) => Math.max(m, c.sort_order || 0), 0)
@@ -340,11 +337,6 @@ export default function Tasks({ userId }) {
     if (data) setCategories(prev => [...prev, ...data])
   }
 
-  function handleToggleDone(task) {
-    const newStatus = task.status === 'done' ? 'todo' : 'done'
-    updateTaskField(task.id, { status: newStatus })
-  }
-
   async function deleteCategory(id) {
     await supabase.from('task_categories').delete().eq('id', id).eq('user_id', userId)
     setCategories(prev => prev.filter(c => c.id !== id))
@@ -352,7 +344,6 @@ export default function Tasks({ userId }) {
     if (filter === id) setFilter('all')
   }
 
-  // ── Drag & Drop ───────────────────────────────────────────────
   function handleDragStart(e, taskId) {
     setDragId(taskId)
     e.dataTransfer.effectAllowed = 'move'
@@ -371,7 +362,6 @@ export default function Tasks({ userId }) {
 
   function handleDrop(status, insertBeforeId) {
     if (!dragId) return
-
     const colTasks = tasks
       .filter(t => t.status === status && t.id !== dragId)
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
@@ -394,7 +384,6 @@ export default function Tasks({ userId }) {
     setDragId(null); setDragTarget(null)
   }
 
-  // ── Render ────────────────────────────────────────────────────
   const filteredTasks = filter === 'all' ? tasks : tasks.filter(t => t.category_id === filter)
   const totalDone     = tasks.filter(t => t.status === 'done').length
 
@@ -415,7 +404,6 @@ export default function Tasks({ userId }) {
         <button className="cal-add-btn" onClick={() => openAdd('todo')}>+ Add task</button>
       </div>
 
-      {/* Category filter bar */}
       <div className="cat-bar">
         <button className={`cat-pill${filter === 'all' ? ' active' : ''}`}
           onClick={() => setFilter('all')}>
@@ -468,30 +456,6 @@ export default function Tasks({ userId }) {
               categories={categories}
               onAddTask={openAdd}
               onEdit={openEdit}
-              onToggleDone={handleToggleDone}
-              dragId={dragId}
-              dragTarget={dragTarget}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            />
-          ))}
-        </div>
-      )}
-
-      <TaskFormModal
-        open={showForm}
-        onClose={() => { setShowForm(false); setEditingTask(null) }}
-        onSave={saveTask}
-        onDelete={deleteTask}
-        task={editingTask}
-        categories={categories}
-        defaultStatus={defStatus}
-      />
-    </div>
-  )
-}
               onToggleDone={handleToggleDone}
               dragId={dragId}
               dragTarget={dragTarget}
