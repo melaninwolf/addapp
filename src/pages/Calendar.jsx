@@ -173,7 +173,7 @@ function GCalEventCard({ event }) {
 }
 
 // ─── MONTH VIEW ───────────────────────────────────────────────
-function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, onViewEvent }) {
+function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onViewEvent }) {
   const [year,  setYear]  = useState(selected.getFullYear())
   const [month, setMonth] = useState(selected.getMonth())
 
@@ -190,6 +190,7 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
   const selRout    = routinesForDate(selected)
   const selGCal    = gcalEventsForDate(selected)
   const selCustom  = customEventsForDate(selected)
+  const selTasks   = tasksForDate(selected)
 
   return (
     <div className="cal-month-layout">
@@ -205,7 +206,8 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
             const dayRout    = routinesForDate(date)
             const dayGCal    = gcalEventsForDate(date)
             const dayCustom  = customEventsForDate(date)
-            const totalItems = dayRout.length + dayGCal.length + dayCustom.length
+            const dayTasks   = tasksForDate(date)
+            const totalItems = dayRout.length + dayGCal.length + dayCustom.length + dayTasks.length
             return (
               <div
                 key={i}
@@ -216,6 +218,7 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
                 <div className="cal-day-pills">
                   {[
                     ...dayCustom.slice(0,1).map(e => ({ key:`c${e.id}`, emoji: e.emoji, name: e.title, cls:'cal-pill-custom', bc: TYPE_BORDER[e.type] })),
+                    ...dayTasks.slice(0,1).map(t  => ({ key:`t${t.id}`, emoji: '✅',   name: t.title,  cls:'cal-pill-custom', bc: t._catColor || 'var(--green)' })),
                     ...dayGCal.slice(0,1).map(e   => ({ key:`g${e.id}`, emoji: '📅',   name: e.summary || '(No title)', cls:'cal-pill-gcal' })),
                     ...dayRout.slice(0,1).map(r   => ({ key:`r${r.id}`, emoji: r.emoji, name: r.name, cls:'' })),
                   ].slice(0, 2).map(item => (
@@ -242,7 +245,7 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
           {isSameDay(selected, today) && <span className="cal-today-tag">Today</span>}
         </div>
 
-        {selRout.length === 0 && selGCal.length === 0 && selCustom.length === 0 ? (
+        {selRout.length === 0 && selGCal.length === 0 && selCustom.length === 0 && selTasks.length === 0 ? (
           <div className="cal-detail-empty">
             <span className="cal-empty-icon">🗓</span>
             <span>Nothing scheduled</span>
@@ -261,6 +264,16 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
                     {e.location && <> · 📍 {e.location}</>}
                   </div>
                   {e.repeat_type && e.repeat_type !== 'none' && <span className="ec-trigger-tag">🔁 {e.repeat_type}</span>}
+                </div>
+              </div>
+            ))}
+            {selTasks.map(t => (
+              <div key={`task-${t.id}`} className="cal-detail-item"
+                style={{ borderLeft: `3px solid ${t._catColor || 'var(--green)'}`, opacity: t._done ? 0.5 : 1 }}>
+                <div className="cdi-emoji" style={{ background: t._catColor ? t._catColor + '20' : 'var(--green-bg)' }}>✅</div>
+                <div className="cdi-info">
+                  <div className="cdi-name" style={{ textDecoration: t._done ? 'line-through' : 'none' }}>{t.title}</div>
+                  <div className="cdi-meta">{t.start_time ? fmtTime(t.start_time) : 'All day'}</div>
                 </div>
               </div>
             ))}
@@ -294,7 +307,7 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
 }
 
 // ─── WEEK VIEW ────────────────────────────────────────────────
-function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate }) {
+function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate }) {
   const [anchor, setAnchor] = useState(() => new Date(selected))
   const weekDays = getWeekDays(anchor)
 
@@ -312,6 +325,7 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
           const dayRout    = routinesForDate(date)
           const dayGCal    = gcalEventsForDate(date)
           const dayCustom  = customEventsForDate(date)
+          const dayTasks   = tasksForDate(date)
           return (
             <div
               key={i}
@@ -325,6 +339,20 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                 </span>
               </div>
               <div className="week-col-body">
+                {dayTasks.map(t => (
+                  <div key={`task-${t.id}`} className="week-event"
+                    style={{
+                      borderLeft: `2px solid ${t._catColor || 'var(--green)'}`,
+                      background: t._catColor ? t._catColor + '18' : 'var(--green-bg)',
+                      opacity: t._done ? 0.5 : 1,
+                    }}>
+                    <span className="we-emoji">✅</span>
+                    <div className="we-body">
+                      <div className="we-name" style={{ textDecoration: t._done ? 'line-through' : 'none' }}>{t.title}</div>
+                      {t.start_time && <div className="we-time">{fmtTime(t.start_time)}</div>}
+                    </div>
+                  </div>
+                ))}
                 {dayCustom.map(e => (
                   <div key={e.id} className="week-event"
                     style={{ borderLeft: `2px solid ${TYPE_BORDER[e.type] || 'var(--accent)'}`, background: TYPE_BG[e.type] }}>
@@ -353,7 +381,7 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                     </div>
                   </div>
                 ))}
-                {dayRout.length === 0 && dayGCal.length === 0 && dayCustom.length === 0 && <div className="week-no-rout" />}
+                {dayRout.length === 0 && dayGCal.length === 0 && dayCustom.length === 0 && dayTasks.length === 0 && <div className="week-no-rout" />}
               </div>
             </div>
           )
@@ -754,7 +782,7 @@ function hourLabel(h) {
   return `${h - 12} PM`
 }
 
-function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, onUpdateEvent, onViewEvent }) {
+function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onUpdateEvent, onViewEvent }) {
   const [now, setNow] = useState(() => new Date())
   const scrollRef = useRef(null)
   const dragRef   = useRef(null)
@@ -786,6 +814,9 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
   const alldayGCal   = dayGCal.filter(e => e.start?.date && !e.start?.dateTime)
   const timedCustom  = dayCustom.filter(e => !e.all_day && e.start_time)
   const alldayCustom = dayCustom.filter(e => e.all_day || !e.start_time)
+  const dayTasks     = tasksForDate(selected)
+  const timedTasks   = dayTasks.filter(t => t.start_time)
+  const alldayTasks  = dayTasks.filter(t => !t.start_time)
 
   const nowTop = (now.getHours() + now.getMinutes() / 60) * PX_PER_HOUR
 
@@ -812,6 +843,11 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
         durMin = Math.max(30, (eh * 60 + em) - startMin)
       }
       return { type: 'custom', subtype: e.type, startMin, durMin, data: e, key: `c-${e.id}` }
+    }),
+    ...timedTasks.map(t => {
+      const [h, m] = t.start_time.split(':').map(Number)
+      const startMin = h * 60 + m
+      return { type: 'task', subtype: 'task', startMin, durMin: 60, data: t, key: `t-${t.id}` }
     }),
   ]
   const eventBlocks = layoutEvents(rawBlocks)
@@ -897,9 +933,9 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
       <CalNav onPrev={prev} onNext={next} label={dateLabel} />
 
       {/* All-day / flexible chips */}
-      {(alldayGCal.length > 0 || flexRout.length > 0 || alldayCustom.length > 0) && (
+      {(alldayGCal.length > 0 || flexRout.length > 0 || alldayCustom.length > 0 || alldayTasks.length > 0) && (
         <div className="day-header-section">
-          {alldayCustom.length > 0 && (
+          {(alldayCustom.length > 0 || alldayTasks.length > 0) && (
             <div className="day-allday-row">
               <div className="day-time-col-label">All day</div>
               <div className="day-chips">
@@ -908,6 +944,18 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                     style={{ background: TYPE_BG[e.type], borderColor: TYPE_BORDER[e.type], color: TYPE_BORDER[e.type], cursor: 'pointer' }}
                     onClick={() => onViewEvent && onViewEvent(e)}>
                     {e.emoji} {e.title}
+                  </div>
+                ))}
+                {alldayTasks.map(t => (
+                  <div key={`task-${t.id}`} className="day-chip"
+                    style={{
+                      background:  t._catColor ? t._catColor + '18' : 'var(--green-bg)',
+                      borderColor: t._catColor || 'var(--green)',
+                      color:       t._catColor || 'var(--green)',
+                      opacity:     t._done ? 0.5 : 1,
+                      textDecoration: t._done ? 'line-through' : 'none',
+                    }}>
+                    ✅ {t.title}
                   </div>
                 ))}
               </div>
@@ -966,10 +1014,16 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
               const isDragging = dragVis?.eventId === block.data?.id && block.type === 'custom'
 
               // Custom event style overrides
+              const taskColor   = block.type === 'task' ? (block.data._catColor || 'var(--green)') : null
               const customStyle = (block.type === 'custom' && !isMissed) ? {
                 background:      TYPE_BG[block.subtype]     || 'var(--bg3)',
                 borderColor:     TYPE_BORDER[block.subtype] || 'var(--accent)',
                 borderLeftColor: TYPE_BORDER[block.subtype] || 'var(--accent)',
+              } : block.type === 'task' ? {
+                background:      taskColor + '18',
+                borderColor:     taskColor,
+                borderLeftColor: taskColor,
+                opacity:         block.data._done ? 0.5 : 1,
               } : {}
 
               return (
@@ -977,8 +1031,9 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                   key={block.key}
                   className={[
                     'day-event-block',
-                    block.type === 'gcal'   ? 'day-event-gcal'    :
-                    block.type === 'custom' ? 'day-event-custom'  : 'day-event-routine',
+                    block.type === 'gcal'   ? 'day-event-gcal'   :
+                    block.type === 'custom' ? 'day-event-custom' :
+                    block.type === 'task'   ? 'day-event-custom' : 'day-event-routine',
                     pastCls,
                     isDragging ? 'ev-dragging' : '',
                     block.type === 'custom' ? 'ev-draggable' : '',
@@ -1007,6 +1062,16 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                         <div className="deb-name">{block.data.summary || '(No title)'}</div>
                         {!isShort && (
                           <div className="deb-meta gcal-time">{eventTimeLabel(block.data)}</div>
+                        )}
+                      </div>
+                    </>
+                  ) : block.type === 'task' ? (
+                    <>
+                      <span className="deb-emoji">✅</span>
+                      <div className="deb-body">
+                        <div className="deb-name" style={{ textDecoration: block.data._done ? 'line-through' : 'none' }}>{block.data.title}</div>
+                        {!isShort && block.data.start_time && (
+                          <div className="deb-meta">{fmtTime(block.data.start_time)}</div>
                         )}
                       </div>
                     </>
@@ -1075,6 +1140,8 @@ export default function Calendar({ userId }) {
   const [showAddModal,   setShowAddModal]  = useState(false)
   const [viewingEvent,   setViewingEvent]  = useState(null)
   const [editingEvent,   setEditingEvent]  = useState(null)
+  const [tasks,          setTasks]          = useState([])
+  const [taskCategories, setTaskCategories] = useState([])
 
   // Google Calendar state
   const [gisReady,    setGisReady]    = useState(false)
@@ -1106,6 +1173,18 @@ export default function Calendar({ userId }) {
       .select('*')
       .eq('user_id', userId)
       .then(({ data, error }) => { if (!error && data) setCalEvents(data) })
+  }, [userId])
+
+  // Load tasks with due dates + their categories
+  useEffect(() => {
+    if (!userId) return
+    Promise.all([
+      supabase.from('tasks').select('*').eq('user_id', userId).not('due_date', 'is', null),
+      supabase.from('task_categories').select('*').eq('user_id', userId),
+    ]).then(([taskRes, catRes]) => {
+      setTasks(taskRes.data || [])
+      setTaskCategories(catRes.data || [])
+    })
   }, [userId])
 
   // Load routines
@@ -1189,6 +1268,26 @@ export default function Calendar({ userId }) {
         default:        return false
       }
     })
+  }
+
+  function tasksForDate(date) {
+    const dateStr = formatDateForInput(date)
+    return tasks
+      .filter(t => t.due_date === dateStr)
+      .map(t => {
+        const cat = taskCategories.find(c => c.id === t.category_id)
+        return {
+          id:         t.id,
+          _isTask:    true,
+          type:       'task',
+          emoji:      '✅',
+          title:      t.title,
+          start_time: t.due_time || null,
+          all_day:    !t.due_time,
+          _catColor:  cat?.color || null,
+          _done:      t.status === 'done',
+        }
+      })
   }
 
   // ── CRUD ─────────────────────────────────────────────────────
@@ -1296,15 +1395,16 @@ export default function Calendar({ userId }) {
       ) : view === 'month' ? (
         <MonthView today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
-          customEventsForDate={customEventsForDate} onViewEvent={handleViewEvent} />
+          customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
+          onViewEvent={handleViewEvent} />
       ) : view === 'week' ? (
         <WeekView  today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
-          customEventsForDate={customEventsForDate} />
+          customEventsForDate={customEventsForDate} tasksForDate={tasksForDate} />
       ) : (
         <DayView   today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
-          customEventsForDate={customEventsForDate}
+          customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
           onUpdateEvent={updateCalendarEvent}
           onViewEvent={handleViewEvent} />
       )}

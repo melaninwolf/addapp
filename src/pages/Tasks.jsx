@@ -54,6 +54,7 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
   const [priority,   setPriority]   = useState('medium')
   const [categoryId, setCategoryId] = useState('')
   const [dueDate,    setDueDate]    = useState('')
+  const [dueTime,    setDueTime]    = useState('')
   const [notes,      setNotes]      = useState('')
   const [saving,     setSaving]     = useState(false)
 
@@ -65,10 +66,11 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
       setPriority(task.priority || 'medium')
       setCategoryId(task.category_id || '')
       setDueDate(task.due_date || '')
+      setDueTime(task.due_time || '')
       setNotes(task.notes || '')
     } else {
       setTitle(''); setStatus(defaultStatus || 'todo'); setPriority('medium')
-      setCategoryId(categories[0]?.id || ''); setDueDate(''); setNotes('')
+      setCategoryId(categories[0]?.id || ''); setDueDate(''); setDueTime(''); setNotes('')
     }
   }, [open, task]) // eslint-disable-line
 
@@ -78,7 +80,7 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
     if (!title.trim() || saving) return
     setSaving(true)
     try {
-      await onSave({ title: title.trim(), status, priority, category_id: categoryId || null, due_date: dueDate || null, notes: notes.trim() || null })
+      await onSave({ title: title.trim(), status, priority, category_id: categoryId || null, due_date: dueDate || null, due_time: dueTime || null, notes: notes.trim() || null })
       onClose()
     } finally { setSaving(false) }
   }
@@ -130,9 +132,16 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
           </div>
 
           <div className="modal-field">
-            <label className="modal-label">Due date</label>
-            <input type="date" className="modal-input" value={dueDate}
-              onChange={e => setDueDate(e.target.value)} style={{ maxWidth: 200 }} />
+            <label className="modal-label">Due date & time</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="date" className="modal-input" value={dueDate}
+                onChange={e => setDueDate(e.target.value)} style={{ flex: 1, maxWidth: 200 }} />
+              {dueDate && (
+                <input type="time" className="modal-input" value={dueTime}
+                  onChange={e => setDueTime(e.target.value)}
+                  style={{ flex: 1, maxWidth: 150 }} />
+              )}
+            </div>
           </div>
 
           <textarea className="modal-input modal-textarea"
