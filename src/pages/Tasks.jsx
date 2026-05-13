@@ -47,12 +47,13 @@ function isPastDue(d) {
 }
 
 // ─── Task Form Modal ─────────────────────────────────────────
-function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defaultStatus }) {
+function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, activeProjects, defaultStatus }) {
   const isEdit = !!task
   const [title,      setTitle]      = useState('')
   const [status,     setStatus]     = useState('todo')
   const [priority,   setPriority]   = useState('medium')
   const [categoryId, setCategoryId] = useState('')
+  const [projectId,  setProjectId]  = useState('')
   const [dueDate,    setDueDate]    = useState('')
   const [dueTime,    setDueTime]    = useState('')
   const [notes,      setNotes]      = useState('')
@@ -65,12 +66,13 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
       setStatus(task.status || 'todo')
       setPriority(task.priority || 'medium')
       setCategoryId(task.category_id || '')
+      setProjectId(task.project_id || '')
       setDueDate(task.due_date || '')
       setDueTime(task.due_time || '')
       setNotes(task.notes || '')
     } else {
       setTitle(''); setStatus(defaultStatus || 'todo'); setPriority('medium')
-      setCategoryId(categories[0]?.id || ''); setDueDate(''); setDueTime(''); setNotes('')
+      setCategoryId(categories[0]?.id || ''); setProjectId(''); setDueDate(''); setDueTime(''); setNotes('')
     }
   }, [open, task]) // eslint-disable-line
 
@@ -80,7 +82,7 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
     if (!title.trim() || saving) return
     setSaving(true)
     try {
-      await onSave({ title: title.trim(), status, priority, category_id: categoryId || null, due_date: dueDate || null, due_time: dueTime || null, notes: notes.trim() || null })
+      await onSave({ title: title.trim(), status, priority, category_id: categoryId || null, project_id: projectId || null, due_date: dueDate || null, due_time: dueTime || null, notes: notes.trim() || null })
       onClose()
     } finally { setSaving(false) }
   }
@@ -130,6 +132,19 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, defa
               </select>
             </div>
           </div>
+
+          {activeProjects?.length > 0 && (
+            <div className="modal-field">
+              <label className="modal-label">Project</label>
+              <select className="modal-input modal-select" value={projectId}
+                onChange={e => setProjectId(e.target.value)}>
+                <option value="">No project</option>
+                {activeProjects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="modal-field">
             <label className="modal-label">Due date & time</label>
@@ -269,9 +284,10 @@ function KanbanColumn({ status, tasks, categories, onAddTask, onEdit, onToggleDo
 
 // ─── Tasks Page ───────────────────────────────────────────────
 export default function Tasks({ userId }) {
-  const [tasks,       setTasks]       = useState([])
-  const [categories,  setCategories]  = useState([])
-  const [loading,     setLoading]     = useState(true)
+  const [tasks,          setTasks]          = useState([])
+  const [categories,     setCategories]     = useState([])
+  const [activeProjects, setActiveProjects] = useState([])
+  const [loading,        setLoading]        = useState(true)
   const [filter,      setFilter]      = useState('all')
   const [showForm,    setShowForm]    = useState(false)
   const [editingTask, setEditingTask] = useState(null)
@@ -285,9 +301,11 @@ export default function Tasks({ userId }) {
 
   async function loadAll() {
     setLoading(true)
-    const [catRes, taskRes] = await Promise.all([
+    const [catRes, taskRes, projRes] = await Promise.all([
       supabase.from('task_categories').select('*').eq('user_id', userId).order('sort_order'),
       supabase.from('tasks').select('*').eq('user_id', userId).order('sort_order'),
+      supabase.from('projects').select('id, name, color').eq('user_id', userId)
+        .in('status', ['not_started', 'active', 'hold']),
     ])
 
     let cats = catRes.data || []
@@ -299,6 +317,7 @@ export default function Tasks({ userId }) {
 
     setCategories(cats)
     setTasks(taskRes.data || [])
+    setActiveProjects(projRes.data || [])
     setLoading(false)
   }
 
@@ -484,6 +503,7 @@ export default function Tasks({ userId }) {
         onDelete={deleteTask}
         task={editingTask}
         categories={categories}
+        activeProjects={activeProjects}
         defaultStatus={defStatus}
       />
     </div>

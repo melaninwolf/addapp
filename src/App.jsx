@@ -2,8 +2,10 @@ import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router
 import { useState, useEffect } from 'react'
 import Routines from './pages/Routines.jsx'
 import Calendar from './pages/Calendar.jsx'
-import Tasks    from './pages/Tasks.jsx'
-import Settings from './pages/Settings.jsx'
+import Tasks         from './pages/Tasks.jsx'
+import Projects      from './pages/Projects.jsx'
+import ProjectDetail from './pages/ProjectDetail.jsx'
+import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
 import { getXP, getLevel, getLevelProgress, getXPIntoLevel } from './xp'
@@ -151,6 +153,13 @@ function AppShell({ user }) {
             {showFull && <span>Tasks</span>}
           </NavLink>
 
+          <NavLink to="/projects"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Projects' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">📁</span>
+            {showFull && <span>Projects</span>}
+          </NavLink>
+
           {[
             { icon: '💚', label: 'Health'        },
             { icon: '📓', label: 'Journal'       },
@@ -193,7 +202,9 @@ function AppShell({ user }) {
         <Routes>
           <Route path="/"         element={<Routines userId={user?.id} />} />
           <Route path="/calendar" element={<Calendar userId={user?.id} />} />
-          <Route path="/tasks"    element={<Tasks    userId={user?.id} />} />
+          <Route path="/tasks"        element={<Tasks         userId={user?.id} />} />
+          <Route path="/projects"     element={<Projects      userId={user?.id} />} />
+          <Route path="/projects/:id" element={<ProjectDetail userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />

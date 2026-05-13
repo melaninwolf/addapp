@@ -1,0 +1,458 @@
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { supabase } from '../supabase'
+import { statusInfo, PROJECT_COLORS, PROJECT_STATUSES } from './Projects'
+import './Projects.css'
+
+function fmtDate(d) {
+  if (!d) return null
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// ── Milestone item ────────────────────────────────────────────
+function MilestoneItem({ milestone, onMarkDone, onAddMicro, onToggleMicro, onDeleteMilestone }) {
+  const [newMicro, setNewMicro] = useState('')
+  const [adding,   setAdding]   = useState(false)
+
+  const total = milestone.micro_milestones?.length || 0
+  const done  = milestone.micro_milestones?.filter(m => m.done).length || 0
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0
+
+  async function handleAddMicro(e) {
+    if (e.key !== 'Enter' || !newMicro.trim()) return
+    await onAddMicro(milestone.id, newMicro.trim())
+    setNewMicro('')
+    setAdding(false)
+  }
+
+  return (
+    <div className={`ms-item${milestone.done ? ' ms-done' : ''}`}>
+      <div className="ms-header">
+        <div className="ms-header-left">
+          <button
+            className={`ms-check${milestone.done ? ' ms-check-done' : ''}`}
+            onClick={() => onMarkDone(milestone)}
+            title={milestone.done ? 'Mark incomplete' : 'Mark done'}
+          >
+            {milestone.done && (
+              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4l2.5 3L9 1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          <span className="ms-name">{milestone.name}</span>
+          {milestone.due_date && (
+            <span className="ms-due">{fmtDate(milestone.due_date)}</span>
+          )}
+        </div>
+        <div className="ms-header-right">
+          {total > 0 && <span className="ms-pct">{pct}%</span>}
+          <button className="ms-del-btn" onClick={() => onDeleteMilestone(milestone.id)}>✕</button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {total > 0 && (
+        <div className="ms-prog-wrap">
+          <div className="ms-prog-track">
+            <div className="ms-prog-fill" style={{ width: pct + '%' }} />
+          </div>
+          <span className="ms-prog-label">{done}/{total}</span>
+        </div>
+      )}
+
+      {/* Micro-milestones */}
+      <div className="mm-list">
+        {milestone.micro_milestones?.map(mm => (
+          <div
+            key={mm.id}
+            className={`mm-item${mm.done ? ' mm-done' : ''}`}
+            onClick={() => onToggleMicro(mm)}
+          >
+            <div className={`mm-dot${mm.done ? ' mm-dot-done' : ''}`} />
+            <span className="mm-name">{mm.name}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Add micro */}
+      {adding ? (
+        <input
+          className="mm-add-input"
+          placeholder="Micro-milestone… (Enter to save, Esc to cancel)"
+          value={newMicro}
+          onChange={e => setNewMicro(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') handleAddMicro(e)
+            if (e.key === 'Escape') { setAdding(false); setNewMicro('') }
+          }}
+          onBlur={() => { if (!newMicro.trim()) setAdding(false) }}
+          autoFocus
+        />
+      ) : (
+        <button className="mm-add-btn" onClick={() => setAdding(true)}>+ micro-milestone</button>
+      )}
+    </div>
+  )
+}
+
+// ── Root ──────────────────────────────────────────────────────
+export default function ProjectDetail({ userId }) {
+  const { id }    = useParams()
+  const navigate  = useNavigate()
+
+  const [project,    setProject]    = useState(null)
+  const [milestones, setMilestones] = useState([])
+  const [tasks,      setTasks]      = useState([])
+  const [trigger,    setTrigger]    = useState(null)
+  const [loading,    setLoading]    = useState(true)
+  const [editing,    setEditing]    = useState(false)
+
+  // Edit fields
+  const [editName,    setEditName]    = useState('')
+  const [editReqs,    setEditReqs]    = useState('')
+  const [editColor,   setEditColor]   = useState('')
+  const [editStatus,  setEditStatus]  = useState('')
+  const [editStart,   setEditStart]   = useState('')
+  const [editEnd,     setEditEnd]     = useState('')
+
+  // New milestone
+  const [newMs,    setNewMs]    = useState('')
+  const [newMsDue, setNewMsDue] = useState('')
+  const [addingMs, setAddingMs] = useState(false)
+
+  const load = useCallback(async () => {
+    if (!userId || !id) return
+    const [projRes, msRes, taskRes] = await Promise.all([
+      supabase.from('projects').select('*').eq('id', id).eq('user_id', userId).single(),
+      supabase.from('milestones')
+        .select('*, micro_milestones(*)')
+        .eq('project_id', id)
+        .order('order_index')
+        .order('order_index', { referencedTable: 'micro_milestones' }),
+      supabase.from('tasks').select('*').eq('project_id', id).eq('user_id', userId),
+    ])
+    const proj = projRes.data
+    setProject(proj)
+    setMilestones(msRes.data || [])
+    setTasks(taskRes.data || [])
+
+    if (proj?.trigger_id) {
+      const { data } = await supabase
+        .from('routines').select('id, name, emoji, type')
+        .eq('id', proj.trigger_id).single()
+      setTrigger(data)
+    } else {
+      setTrigger(null)
+    }
+    setLoading(false)
+  }, [userId, id])
+
+  useEffect(() => { load() }, [load])
+
+  function startEdit() {
+    if (!project) return
+    setEditName(project.name || '')
+    setEditReqs(project.requirements || '')
+    setEditColor(project.color || PROJECT_COLORS[0])
+    setEditStatus(project.status || 'not_started')
+    setEditStart(project.start_date || '')
+    setEditEnd(project.end_date || '')
+    setEditing(true)
+  }
+
+  async function saveEdit() {
+    const payload = {
+      name:         editName.trim(),
+      requirements: editReqs.trim() || null,
+      color:        editColor,
+      status:       editStatus,
+      start_date:   editStart || null,
+      end_date:     editEnd   || null,
+      updated_at:   new Date().toISOString(),
+    }
+    const { data, error } = await supabase
+      .from('projects').update(payload)
+      .eq('id', id).eq('user_id', userId).select().single()
+    if (!error && data) { setProject(data); setEditing(false) }
+  }
+
+  // ── Milestone CRUD ────────────────────────────────────────
+  async function addMilestone() {
+    if (!newMs.trim()) return
+    const { data, error } = await supabase
+      .from('milestones')
+      .insert([{ project_id: id, user_id: userId, name: newMs.trim(), due_date: newMsDue || null, order_index: milestones.length }])
+      .select('*, micro_milestones(*)')
+    if (!error && data) {
+      setMilestones(prev => [...prev, data[0]])
+      setNewMs(''); setNewMsDue(''); setAddingMs(false)
+    }
+  }
+
+  async function markMilestoneDone(milestone) {
+    const newDone = !milestone.done
+    await supabase.from('milestones').update({ done: newDone }).eq('id', milestone.id)
+    if (newDone && milestone.micro_milestones?.length > 0) {
+      await supabase.from('micro_milestones').update({ done: true }).eq('milestone_id', milestone.id)
+    }
+    const { data } = await supabase
+      .from('milestones').select('*, micro_milestones(*)')
+      .eq('project_id', id).order('order_index')
+      .order('order_index', { referencedTable: 'micro_milestones' })
+    setMilestones(data || [])
+  }
+
+  async function deleteMilestone(msId) {
+    await supabase.from('milestones').delete().eq('id', msId)
+    setMilestones(prev => prev.filter(m => m.id !== msId))
+  }
+
+  // ── Micro-milestone CRUD ──────────────────────────────────
+  async function addMicroMilestone(milestoneId, name) {
+    const ms = milestones.find(m => m.id === milestoneId)
+    const { data, error } = await supabase
+      .from('micro_milestones')
+      .insert([{ milestone_id: milestoneId, user_id: userId, name, order_index: ms?.micro_milestones?.length || 0 }])
+      .select()
+    if (!error && data) {
+      setMilestones(prev => prev.map(m =>
+        m.id === milestoneId
+          ? { ...m, micro_milestones: [...(m.micro_milestones || []), data[0]] }
+          : m
+      ))
+    }
+  }
+
+  async function toggleMicroMilestone(mm) {
+    const newDone = !mm.done
+    await supabase.from('micro_milestones').update({ done: newDone }).eq('id', mm.id)
+    setMilestones(prev => prev.map(m => ({
+      ...m,
+      micro_milestones: m.micro_milestones?.map(x =>
+        x.id === mm.id ? { ...x, done: newDone } : x
+      ),
+    })))
+  }
+
+  // ─────────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'40vh', color:'var(--text3)', fontSize:14 }}>
+      Loading…
+    </div>
+  )
+
+  if (!project) return (
+    <div className="placeholder-page">
+      <button className="back-btn" onClick={() => navigate('/projects')}>← Projects</button>
+      <p>Project not found.</p>
+    </div>
+  )
+
+  const s         = statusInfo(project.status)
+  const totalMs   = milestones.length
+  const doneMs    = milestones.filter(m => m.done).length
+  const projPct   = totalMs > 0 ? Math.round((doneMs / totalMs) * 100) : 0
+  const doneTasks = tasks.filter(t => t.status === 'done').length
+
+  return (
+    <div className="proj-detail-page">
+      <button className="back-btn" onClick={() => navigate('/projects')}>← Projects</button>
+
+      {/* ── Header ── */}
+      <div className="pd-header">
+        <div className="pd-header-left">
+          <div className="pd-color-dot" style={{ background: project.color }} />
+          <div>
+            {editing ? (
+              <input className="modal-input pd-name-input" value={editName}
+                onChange={e => setEditName(e.target.value)} autoFocus />
+            ) : (
+              <h1 className="pd-title">{project.name}</h1>
+            )}
+            <div className="pd-meta-row">
+              <span className="proj-badge" style={{ '--badge-color': s.color }}>{s.label}</span>
+              {project.start_date && <span className="pd-date">{fmtDate(project.start_date)}</span>}
+              {project.end_date && (
+                <><span className="pd-date-sep">→</span><span className="pd-date">{fmtDate(project.end_date)}</span></>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pd-header-right">
+          {totalMs > 0 && (
+            <div className="pd-progress">
+              <div className="pd-prog-label">{projPct}% complete</div>
+              <div className="pd-prog-track">
+                <div className="pd-prog-fill" style={{ width: projPct + '%', background: project.color }} />
+              </div>
+              <div className="pd-prog-sub">{doneMs}/{totalMs} milestones</div>
+            </div>
+          )}
+          {editing ? (
+            <div style={{ display:'flex', gap:6 }}>
+              <button className="modal-btn modal-btn-save" onClick={saveEdit}>Save</button>
+              <button className="modal-btn modal-btn-cancel" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          ) : (
+            <button className="pd-edit-btn" onClick={startEdit}>Edit</button>
+          )}
+        </div>
+      </div>
+
+      <div className="pd-body">
+
+        {/* Edit panel */}
+        {editing && (
+          <div className="pd-section pd-edit-panel">
+            <div className="modal-row" style={{ flexWrap:'wrap', gap:12 }}>
+              <div className="modal-field">
+                <label className="modal-label">Color</label>
+                <div className="proj-color-picker">
+                  {PROJECT_COLORS.map(c => (
+                    <button key={c} className={`proj-color-dot${editColor === c ? ' selected' : ''}`}
+                      style={{ background: c }} onClick={() => setEditColor(c)} />
+                  ))}
+                </div>
+              </div>
+              <div className="modal-field">
+                <label className="modal-label">Status</label>
+                <div className="proj-status-picker">
+                  {PROJECT_STATUSES.map(st => (
+                    <button key={st.key}
+                      className={`proj-status-btn${editStatus === st.key ? ' active' : ''}`}
+                      style={{ '--s-color': st.color }}
+                      onClick={() => setEditStatus(st.key)}>
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="modal-row">
+              <div className="modal-field" style={{ flex:1 }}>
+                <label className="modal-label">Start date</label>
+                <input type="date" className="modal-input" value={editStart}
+                  onChange={e => setEditStart(e.target.value)} />
+              </div>
+              <div className="modal-field" style={{ flex:1 }}>
+                <label className="modal-label">End date</label>
+                <input type="date" className="modal-input" value={editEnd}
+                  onChange={e => setEditEnd(e.target.value)} min={editStart} />
+              </div>
+            </div>
+            <div className="modal-field">
+              <label className="modal-label">Requirements</label>
+              <textarea className="modal-input modal-textarea" rows={3} value={editReqs}
+                onChange={e => setEditReqs(e.target.value)} placeholder="What needs to be done…" />
+            </div>
+          </div>
+        )}
+
+        {/* Requirements (read-only) */}
+        {!editing && project.requirements && (
+          <div className="pd-section">
+            <div className="pd-section-title">Requirements</div>
+            <div className="pd-requirements">{project.requirements}</div>
+          </div>
+        )}
+
+        {/* Activation trigger */}
+        <div className="pd-section">
+          <div className="pd-section-title">Activation trigger</div>
+          {trigger ? (
+            <div className="pd-trigger-chip">
+              <span>{trigger.emoji}</span>
+              <span>{trigger.name}</span>
+              <span className="pd-trigger-tag">🕹️ Trigger</span>
+            </div>
+          ) : (
+            <div className="pd-empty-field">No trigger linked</div>
+          )}
+        </div>
+
+        {/* Milestones */}
+        <div className="pd-section">
+          <div className="pd-section-header">
+            <div className="pd-section-title">Milestones</div>
+            <button className="pd-section-add-btn" onClick={() => setAddingMs(true)}>+ Add milestone</button>
+          </div>
+
+          {addingMs && (
+            <div className="ms-add-form">
+              <input className="modal-input" placeholder="Milestone name" value={newMs}
+                onChange={e => setNewMs(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addMilestone()} autoFocus />
+              <input type="date" className="modal-input" value={newMsDue}
+                onChange={e => setNewMsDue(e.target.value)} style={{ maxWidth: 160 }} />
+              <div style={{ display:'flex', gap:6 }}>
+                <button className="modal-btn modal-btn-save" onClick={addMilestone}>Add</button>
+                <button className="modal-btn modal-btn-cancel"
+                  onClick={() => { setAddingMs(false); setNewMs(''); setNewMsDue('') }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {milestones.length === 0 && !addingMs && (
+            <div className="pd-empty-field">No milestones yet</div>
+          )}
+
+          <div className="ms-list">
+            {milestones.map(ms => (
+              <MilestoneItem
+                key={ms.id}
+                milestone={ms}
+                onMarkDone={markMilestoneDone}
+                onAddMicro={addMicroMilestone}
+                onToggleMicro={toggleMicroMilestone}
+                onDeleteMilestone={deleteMilestone}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Focus sessions placeholder */}
+        <div className="pd-section pd-placeholder-section">
+          <div className="pd-section-title">Focus sessions</div>
+          <div className="pd-placeholder-chip">🎯 Coming soon — links to Focus Sessions</div>
+        </div>
+
+        {/* Tasks */}
+        <div className="pd-section">
+          <div className="pd-section-header">
+            <div className="pd-section-title">Tasks</div>
+            <span className="pd-section-count">{doneTasks}/{tasks.length}</span>
+          </div>
+          {tasks.length === 0 ? (
+            <div className="pd-empty-field">No tasks linked yet — assign tasks to this project from the Tasks board</div>
+          ) : (
+            <div className="pd-task-list">
+              {tasks.map(t => (
+                <div key={t.id} className={`pd-task-row${t.status === 'done' ? ' pd-task-done' : ''}`}>
+                  <div className={`pd-task-check${t.status === 'done' ? ' done' : ''}`}>
+                    {t.status === 'done' && (
+                      <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                        <path d="M1 3l1.8 2.2L7 1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                  <span className="pd-task-name">{t.title}</span>
+                  {t.due_date && <span className="pd-task-due">{fmtDate(t.due_date)}</span>}
+                  <span className={`pd-task-status-badge pd-task-${t.status}`}>{t.status.replace('_', ' ')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Mind map placeholder */}
+        <div className="pd-section pd-placeholder-section">
+          <div className="pd-section-title">Mind map</div>
+          <div className="pd-placeholder-chip">🗺️ Coming soon — visual mind map</div>
+        </div>
+
+      </div>
+    </div>
+  )
+}
