@@ -230,7 +230,9 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
   const [paused, setPaused] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
-  const timerRef = useRef(null)
+  const timerRef    = useRef(null)
+  const hiddenAtRef = useRef(null)   // Page Visibility: timestamp when tab was hidden
+  const pausedRef   = useRef(false)  // always-current mirror of paused state
 
   const step = queue[stepIdx]
   const isDeferred = step?.deferred || false
@@ -240,6 +242,9 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
   const upcoming = queue.slice(stepIdx + 1)
 
   useEffect(() => { setElapsed(0); setPaused(false) }, [stepIdx])
+
+  // Keep pausedRef in sync so the visibility handler always sees current value
+  useEffect(() => { pausedRef.current = paused }, [paused])
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -254,6 +259,25 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
     }
     return () => clearInterval(timerRef.current)
   }, [stepIdx, paused])
+
+  // Page Visibility API — recover time lost while tab was backgrounded on mobile
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.hidden) {
+        // Tab went to background — record when
+        hiddenAtRef.current = Date.now()
+      } else {
+        // Tab came back — fast-forward elapsed by however long we were gone
+        if (hiddenAtRef.current !== null && !pausedRef.current) {
+          const secondsAway = Math.floor((Date.now() - hiddenAtRef.current) / 1000)
+          if (secondsAway > 0) setElapsed(e => e + secondsAway)
+        }
+        hiddenAtRef.current = null
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
 
   useEffect(() => {
     if (elapsed === totalSecs && step && totalSecs > 0) {

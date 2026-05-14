@@ -56,6 +56,8 @@ export default function FocusSession({ userId }) {
   const [confirmStop, setConfirmStop] = useState(false)
 
   const intervalRef = useRef(null)
+  const hiddenAtRef = useRef(null)   // Page Visibility: when tab was hidden
+  const runningRef  = useRef(false)  // always-current mirror of running state
 
   // ── Load active projects ──
   useEffect(() => {
@@ -68,6 +70,37 @@ export default function FocusSession({ userId }) {
       .order('name')
       .then(({ data }) => setProjects(data || []))
   }, [userId])
+
+  // Keep runningRef in sync so visibility handler always sees current value
+  useEffect(() => { runningRef.current = running }, [running])
+
+  // Page Visibility API — recover time lost while tab was backgrounded on mobile
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.hidden) {
+        hiddenAtRef.current = Date.now()
+      } else {
+        if (hiddenAtRef.current !== null && runningRef.current) {
+          const secondsAway = Math.floor((Date.now() - hiddenAtRef.current) / 1000)
+          if (secondsAway > 0) {
+            setTimeLeft(t => {
+              const next = t - secondsAway
+              if (next <= 0) {
+                // Timer would have expired while away — trigger natural end
+                setRunning(false)
+                setTimerEnded(true)
+                return 0
+              }
+              return next
+            })
+          }
+        }
+        hiddenAtRef.current = null
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
 
   // ── Timer tick ──
   useEffect(() => {
