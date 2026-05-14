@@ -238,7 +238,7 @@ function RoutineModal({ routine, onSave, onClose }) {
 }
 
 // ─── RUNNER ──────────────────────────────────────────────────────────────────
-function RoutineRunner({ routine, onFinish, onStartFocus }) {
+function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   const [queue, setQueue] = useState(routine.steps.map(s => ({ ...s, deferred: false })))
   const [deferred, setDeferred] = useState([])
   const [stepIdx, setStepIdx] = useState(0)
@@ -251,9 +251,18 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
   const [paused, setPaused] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
+
+  // ── Log / time tracking state ──
+  const [initState, setInitState]   = useState('loading') // loading | restart | running
+  const [existingLog, setExistingLog] = useState(null)
+  const [logId, setLogId]           = useState(null)
+  const [startedAt, setStartedAt]   = useState(null)
+  const [autoPaused, setAutoPaused] = useState(false)
+  const autoPausedRef               = useRef(false)
+
   const timerRef    = useRef(null)
-  const hiddenAtRef = useRef(null)   // Page Visibility: timestamp when tab was hidden
-  const pausedRef   = useRef(false)  // always-current mirror of paused state
+  const hiddenAtRef = useRef(null)
+  const pausedRef   = useRef(false)
 
   const step = queue[stepIdx]
   const isDeferred = step?.deferred || false
@@ -285,10 +294,8 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
   useEffect(() => {
     function handleVisibility() {
       if (document.hidden) {
-        // Tab went to background — record when
         hiddenAtRef.current = Date.now()
       } else {
-        // Tab came back — fast-forward elapsed by however long we were gone
         if (hiddenAtRef.current !== null && !pausedRef.current) {
           const secondsAway = Math.floor((Date.now() - hiddenAtRef.current) / 1000)
           if (secondsAway > 0) setElapsed(e => e + secondsAway)
@@ -299,6 +306,108 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [])
+
+  // ── On mount: check for an existing unfinished log today ──
+  useEffect(() => {
+    if (!userId) { setInitState('running'); initFreshLog(); return }
+    const todayStr = new Date().toISOString().split('T')[0]
+    supabase.from('routine_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('routine_id', routine.id)
+      .gte('started_at', todayStr + 'T00:00:00.000Z')
+      .lte('started_at', todayStr + 'T23:59:59.999Z')
+      .in('status', ['in_progress', 'auto_paused'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setExistingLog(data)
+          setInitState('restart')
+        } else {
+          setInitState('running')
+          initFreshLog()
+        }
+      })
+  }, []) // eslint-disable-line
+
+  async function initFreshLog() {
+    const now = new Date().toISOString()
+    setStartedAt(now)
+    if (!userId) return
+    const { data } = await supabase.from('routine_logs')
+      .insert({ user_id: userId, routine_id: routine.id, started_at: now, status: 'in_progress', step_index: 0 })
+      .select('id').single()
+    if (data) setLogId(data.id)
+  }
+
+  function continueFromLog() {
+    setLogId(existingLog.id)
+    setStartedAt(existingLog.started_at)
+    setStepIdx(existingLog.step_index || 0)
+    setInitState('running')
+  }
+
+  async function startFresh() {
+    if (existingLog && userId) {
+      supabase.from('routine_logs')
+        .update({ status: 'abandoned', ended_at: new Date().toISOString() })
+        .eq('id', existingLog.id)
+    }
+    setInitState('running')
+    initFreshLog()
+  }
+
+  // ── Auto-pause: if a step runs 60+ min over its allocated time ──
+  useEffect(() => {
+    if (!step || paused || autoPausedRef.current || totalSecs === 0 || initState !== 'running') return
+    if (elapsed - totalSecs >= 3600) {
+      autoPausedRef.current = true
+      setAutoPaused(true)
+      setPaused(true)
+      if (logId && userId) {
+        supabase.from('routine_logs')
+          .update({ status: 'auto_paused', ended_at: new Date().toISOString(), step_index: stepIdx })
+          .eq('id', logId)
+      }
+    }
+  }, [elapsed]) // eslint-disable-line
+
+  // ── Save completed log + write calendar event when routine finishes ──
+  useEffect(() => {
+    if (!finished || !startedAt) return
+    const endedAt = new Date().toISOString()
+    if (logId && userId) {
+      supabase.from('routine_logs')
+        .update({ status: 'completed', ended_at: endedAt })
+        .eq('id', logId)
+    }
+    writeCalendarEvent(startedAt, endedAt)
+  }, [finished]) // eslint-disable-line
+
+  async function writeCalendarEvent(startTs, endTs) {
+    if (!userId) return
+    const toHHMM = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    const startDate = new Date(startTs)
+    const endDate   = new Date(endTs)
+    await supabase.from('calendar_events').insert({
+      user_id:    userId,
+      title:      `${routine.emoji || '⚡'} ${routine.name}`,
+      date:       startTs.split('T')[0],
+      start_time: toHHMM(startDate),
+      end_time:   toHHMM(endDate),
+      type:       'event',
+      notes:      'Routine completed',
+    })
+  }
+
+  // Keep logId current for auto-pause effect (update DB with step position)
+  useEffect(() => {
+    if (logId && userId && initState === 'running') {
+      supabase.from('routine_logs').update({ step_index: stepIdx }).eq('id', logId)
+    }
+  }, [stepIdx]) // eslint-disable-line
 
   useEffect(() => {
     if (elapsed === totalSecs && step && totalSecs > 0) {
@@ -466,6 +575,36 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
     })
   }
 
+  // ── Loading / restart prompt screens ──
+  if (initState === 'loading') {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60vh', color:'var(--text3)', fontSize:14 }}>
+        Loading…
+      </div>
+    )
+  }
+
+  if (initState === 'restart') {
+    return (
+      <div className="runner-restart-wrap">
+        <div className="runner-restart-card">
+          <div className="runner-restart-emoji">{routine.emoji}</div>
+          <h2 className="runner-restart-title">{routine.name}</h2>
+          <p className="runner-restart-msg">
+            {existingLog?.status === 'auto_paused'
+              ? 'This routine was auto-paused earlier today because a step ran 60+ minutes over.'
+              : 'You have an unfinished session from earlier today.'}
+          </p>
+          <div className="runner-restart-actions">
+            <button className="btn-primary" onClick={continueFromLog}>Continue where I left off</button>
+            <button className="btn-ghost" onClick={startFresh}>Start fresh</button>
+          </div>
+          <button className="btn-ghost-sm" onClick={onFinish} style={{ marginTop: 8 }}>← Back to routines</button>
+        </div>
+      </div>
+    )
+  }
+
   if (finished) {
     const xpPerStep = routine.type === 'trigger' ? 3 : 5
     const xp = doneCount * xpPerStep
@@ -536,6 +675,11 @@ function RoutineRunner({ routine, onFinish, onStartFocus }) {
   return (
     <div className="runner">
       {toast && <div className="runner-toast">{toast}</div>}
+      {autoPaused && (
+        <div className="runner-auto-pause-banner">
+          ⏸ Auto-paused — this step ran 60+ minutes over. Resume or exit when ready.
+        </div>
+      )}
 
       <div className="runner-header">
         <button className="btn-ghost-sm" onClick={onFinish}>← Exit</button>
@@ -636,6 +780,9 @@ export default function Routines({ userId }) {
   const [modal, setModal] = useState(null) // null | 'new' | routine obj
   const [running, setRunning] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // null | routine obj
+  const [markDoneModal, setMarkDoneModal] = useState(null) // null | routine obj
+  const [markDoneTime, setMarkDoneTime] = useState('')
+  const [todayLogs, setTodayLogs] = useState([]) // { routine_id, status }[]
 
   // Load routines from Supabase on mount
   useEffect(() => {
@@ -650,6 +797,18 @@ export default function Routines({ userId }) {
         if (!error) setRoutines(data || [])
         setDbLoading(false)
       })
+  }, [userId])
+
+  // Load today's routine logs so cards can show completion status
+  useEffect(() => {
+    if (!userId) return
+    const todayStr = new Date().toISOString().split('T')[0]
+    supabase.from('routine_logs')
+      .select('routine_id, status')
+      .eq('user_id', userId)
+      .gte('started_at', todayStr + 'T00:00:00.000Z')
+      .lte('started_at', todayStr + 'T23:59:59.999Z')
+      .then(({ data }) => setTodayLogs(data || []))
   }, [userId])
 
   async function saveRoutine(data) {
@@ -677,9 +836,55 @@ export default function Routines({ userId }) {
     setRoutines(r => r.filter(x => x.id !== id))
   }
 
+  function openMarkDone(r) {
+    const now = new Date()
+    setMarkDoneTime(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`)
+    setMarkDoneModal(r)
+  }
+
+  async function submitMarkDone() {
+    if (!markDoneModal || !markDoneTime) return
+    const r = markDoneModal
+    const [h, m] = markDoneTime.split(':').map(Number)
+    const endDate = new Date(); endDate.setHours(h, m, 0, 0)
+    const endTs = endDate.toISOString()
+
+    // Derive start: use routine's scheduled time, or estimate from step total
+    let startDate
+    if (r.time) {
+      const [sh, sm] = r.time.split(':').map(Number)
+      startDate = new Date(); startDate.setHours(sh, sm, 0, 0)
+    } else {
+      startDate = new Date(endDate)
+      startDate.setMinutes(startDate.getMinutes() - totalMins(r.steps))
+    }
+    const startTs = startDate.toISOString()
+    const toHHMM  = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    const dateStr = startTs.split('T')[0]
+
+    await supabase.from('routine_logs').insert({
+      user_id: userId, routine_id: r.id,
+      started_at: startTs, ended_at: endTs,
+      status: 'marked_done', step_index: r.steps.length,
+    })
+    await supabase.from('calendar_events').insert({
+      user_id: userId,
+      title:      `${r.emoji || '⚡'} ${r.name}`,
+      date:       dateStr,
+      start_time: toHHMM(startDate),
+      end_time:   toHHMM(endDate),
+      type:       'event',
+      notes:      'Routine marked as done',
+    })
+
+    setTodayLogs(prev => [...prev, { routine_id: r.id, status: 'marked_done' }])
+    setMarkDoneModal(null)
+  }
+
   if (running) {
     return <RoutineRunner
       routine={running}
+      userId={userId}
       onFinish={() => setRunning(null)}
       onStartFocus={() => { setRunning(null); navigate('/focus') }}
     />
@@ -713,14 +918,18 @@ export default function Routines({ userId }) {
       ) : (() => {
         const regularList = routines.filter(r => r.type !== 'trigger')
         const triggerList = routines.filter(r => r.type === 'trigger')
-        const renderCard = r => (
-          <div key={r.id} className="routine-card">
+        const renderCard = r => {
+          const todayLog = todayLogs.find(l => l.routine_id === r.id)
+          const isDoneToday = todayLog && ['completed', 'marked_done'].includes(todayLog.status)
+          return (
+          <div key={r.id} className={`routine-card${isDoneToday ? ' rc-done-today' : ''}`}>
             <div className="rc-top">
               <div className="rc-emoji">{r.emoji}</div>
               <div className="rc-info">
                 <div className="rc-name-row">
                   <div className="rc-name">{r.name}</div>
                   {r.type === 'trigger' && <span className="rc-trigger-badge">🕹️ Trigger</span>}
+                  {isDoneToday && <span className="rc-done-badge">✓ done today</span>}
                 </div>
                 <div className="rc-meta">{fmtTime(r.time)} &middot; {fmtDays(r.days)}</div>
                 <div className="rc-meta">{r.steps.length} steps &middot; {totalMins(r.steps)} min</div>
@@ -741,10 +950,14 @@ export default function Routines({ userId }) {
             <div className="rc-actions">
               <button className="btn-primary btn-sm" onClick={() => setRunning(r)}>Start</button>
               <button className="btn-ghost btn-sm" onClick={() => setModal(r)}>Edit</button>
+              {!isDoneToday && (
+                <button className="btn-ghost btn-sm" onClick={() => openMarkDone(r)} title="Log as done without running">✓ Mark done</button>
+              )}
               <button className="btn-danger btn-sm" onClick={() => setDeleteConfirm(r)}>Delete</button>
             </div>
           </div>
-        )
+        )}
+
         return (
           <>
             {regularList.length > 0 && (
@@ -786,6 +999,37 @@ export default function Routines({ userId }) {
             <div className="modal-foot">
               <button className="btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button className="btn-danger" onClick={() => { deleteRoutine(deleteConfirm.id); setDeleteConfirm(null) }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {markDoneModal && (
+        <div className="modal-overlay" onClick={() => setMarkDoneModal(null)}>
+          <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Mark as done</h2>
+              <button className="modal-close" onClick={() => setMarkDoneModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
+                {markDoneModal.emoji} <strong>{markDoneModal.name}</strong>
+              </p>
+              <div className="field">
+                <label>What time did you finish?</label>
+                <input
+                  type="time"
+                  value={markDoneTime}
+                  onChange={e => setMarkDoneTime(e.target.value)}
+                />
+              </div>
+              <p style={{fontSize:12, color:'var(--text3)', marginTop:'0.75rem'}}>
+                This will log the routine as done and add it to your calendar.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setMarkDoneModal(null)}>Cancel</button>
+              <button className="btn-primary" onClick={submitMarkDone}>Log it</button>
             </div>
           </div>
         </div>
