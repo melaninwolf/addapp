@@ -1,0 +1,162 @@
+.health-page { max-width: 760px; }
+
+/* ── Metric cards ─────────────────────────────────────────── */
+.health-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 2rem;
+}
+.health-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--hc-color, var(--accent));
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.hc-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+.hc-emoji { font-size: 16px; }
+.hc-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+.hc-val   { display: flex; align-items: baseline; gap: 5px; }
+.hc-num   { font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1; }
+.hc-unit  { font-size: 13px; color: var(--text3); }
+.hc-mood  { font-size: 20px; margin-left: 4px; }
+.hc-empty { font-size: 13px; color: var(--text3); }
+.hc-sub   { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+/* ── 7-day strip ──────────────────────────────────────────── */
+.health-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 10px;
+}
+.health-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 1rem;
+}
+.hs-day {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 8px;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+.hs-day.hs-today  { border-color: var(--accent); }
+.hs-day.hs-logged { background: var(--bg3); }
+.hs-date { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 8px; }
+.hs-today .hs-date { color: var(--accent); }
+.hs-dots { display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; }
+.hs-dot  { width: 8px; height: 8px; border-radius: 50%; }
+.hs-vals { display: flex; flex-direction: column; gap: 2px; font-size: 10px; font-weight: 600; }
+
+/* ── Log history list ─────────────────────────────────────── */
+.health-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hll-row {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+.hll-date {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hll-today-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-glow);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.hll-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.hll-chip {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--chip-c, var(--text2));
+  background: color-mix(in srgb, var(--chip-c, var(--accent)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chip-c, var(--accent)) 25%, transparent);
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+.hll-notes {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 6px;
+}
+
+/* ── Log modal ────────────────────────────────────────────── */
+.health-modal { max-width: 480px; }
+.health-modal-body { display: flex; flex-direction: column; gap: 20px; }
+.hlog-field { display: flex; flex-direction: column; gap: 8px; }
+.hlog-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.hlog-range {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text3);
+  margin-left: 6px;
+}
+.hlog-score-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.hlog-score-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: inherit;
+}
+.hlog-score-btn:hover { border-color: var(--accent); color: var(--text); }
+.hlog-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hlog-num { width: 100px; }
+.hlog-qual-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.hlog-qual-btn {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: inherit;
+}
+.hlog-qual-btn:hover { border-color: var(--accent); color: var(--text); }

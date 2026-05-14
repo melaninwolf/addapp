@@ -25,9 +25,11 @@ export const FONTS = [
 ]
 
 const DEFAULTS = {
-  mode:  'ocean',
-  color: '#3b82f6',
-  font:  'lexend',
+  mode:           'ocean',
+  color:          '#3b82f6',
+  font:           'lexend',
+  healthEnabled:  true,
+  healthMetrics:  ['energy', 'sleep', 'stress'],
 }
 
 const KEY = 'addapp-settings'

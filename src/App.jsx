@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Home     from './pages/Home.jsx'
+import Health   from './pages/Health.jsx'
 import Routines from './pages/Routines.jsx'
 import Calendar from './pages/Calendar.jsx'
 import Tasks         from './pages/Tasks.jsx'
@@ -176,8 +177,16 @@ function AppShell({ user }) {
             {showFull && <span>Focus Session</span>}
           </NavLink>
 
+          {settings.healthEnabled !== false && (
+            <NavLink to="/health"
+              className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+              title={!showFull ? 'Health' : undefined} onClick={closeDrawer}>
+              <span className="nav-icon">💚</span>
+              {showFull && <span>Health</span>}
+            </NavLink>
+          )}
+
           {[
-            { icon: '💚', label: 'Health'  },
             { icon: '📓', label: 'Journal' },
           ].map(item => (
             <div key={item.label} className="nav-item disabled" title={!showFull ? item.label : undefined}>
@@ -222,6 +231,7 @@ function AppShell({ user }) {
           <Route path="/projects"     element={<Projects      userId={user?.id} />} />
           <Route path="/projects/:id" element={<ProjectDetail userId={user?.id} />} />
           <Route path="/focus"        element={<FocusSession  userId={user?.id} />} />
+          <Route path="/health"       element={<Health        userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />

@@ -161,3 +161,52 @@
   color: var(--text2);
   line-height: 1.4;
 }
+
+/* ── Health settings ─────────────────────────────────────── */
+.settings-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--border2);
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.settings-toggle.on { background: var(--accent); }
+.toggle-knob {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+.settings-toggle.on .toggle-knob { transform: translateX(20px); }
+
+.health-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+.health-metric-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  text-align: left;
+  font-family: inherit;
+}
+.health-metric-opt:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.health-metric-opt.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.health-metric-opt.soon { opacity: 0.45; cursor: default; }
+.health-metric-opt .soon { font-size: 10px; font-weight: 600; color: var(--text3); margin-left: auto; }
