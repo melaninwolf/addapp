@@ -5,6 +5,7 @@ import Calendar from './pages/Calendar.jsx'
 import Tasks         from './pages/Tasks.jsx'
 import Projects      from './pages/Projects.jsx'
 import ProjectDetail from './pages/ProjectDetail.jsx'
+import FocusSession  from './pages/FocusSession.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -160,10 +161,16 @@ function AppShell({ user }) {
             {showFull && <span>Projects</span>}
           </NavLink>
 
+          <NavLink to="/focus"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Focus Session' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">🎯</span>
+            {showFull && <span>Focus Session</span>}
+          </NavLink>
+
           {[
-            { icon: '💚', label: 'Health'        },
-            { icon: '📓', label: 'Journal'       },
-            { icon: '🎯', label: 'Focus Session' },
+            { icon: '💚', label: 'Health'  },
+            { icon: '📓', label: 'Journal' },
           ].map(item => (
             <div key={item.label} className="nav-item disabled" title={!showFull ? item.label : undefined}>
               <span className="nav-icon">{item.icon}</span>
@@ -205,6 +212,7 @@ function AppShell({ user }) {
           <Route path="/tasks"        element={<Tasks         userId={user?.id} />} />
           <Route path="/projects"     element={<Projects      userId={user?.id} />} />
           <Route path="/projects/:id" element={<ProjectDetail userId={user?.id} />} />
+          <Route path="/focus"        element={<FocusSession  userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />
