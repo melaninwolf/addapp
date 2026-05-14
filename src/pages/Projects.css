@@ -516,6 +516,32 @@
   font-style: italic;
 }
 
+/* Mind map button — sits right under the project name */
+.pd-mindmap-btn {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.pd-mindmap-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Editable trigger select row */
+.pd-trigger-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pd-trigger-select select { flex: 1; }
+
 .pd-trigger-chip {
   display: inline-flex;
   align-items: center;

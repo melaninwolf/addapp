@@ -104,7 +104,10 @@ export default function ProjectDetail({ userId }) {
   const [project,    setProject]    = useState(null)
   const [milestones, setMilestones] = useState([])
   const [tasks,      setTasks]      = useState([])
-  const [trigger,    setTrigger]    = useState(null)
+  const [trigger,        setTrigger]        = useState(null)
+  const [triggerRoutines,setTriggerRoutines]= useState([])  // all trigger-type routines
+  const [editingTrigger, setEditingTrigger] = useState(false)
+  const [showMindMap,    setShowMindMap]    = useState(false)
   const [loading,    setLoading]    = useState(true)
   const [editing,    setEditing]    = useState(false)
 
@@ -159,11 +162,15 @@ export default function ProjectDetail({ userId }) {
     setMilestones(msRes.data || [])
     setTasks(taskRes.data || [])
 
+    // Load all trigger-type routines for the selector
+    const { data: triggers } = await supabase
+      .from('routines').select('id, name, emoji, type')
+      .eq('user_id', userId).eq('type', 'trigger').order('name')
+    setTriggerRoutines(triggers || [])
+
     if (proj?.trigger_id) {
-      const { data } = await supabase
-        .from('routines').select('id, name, emoji, type')
-        .eq('id', proj.trigger_id).single()
-      setTrigger(data)
+      const found = (triggers || []).find(t => t.id === proj.trigger_id)
+      setTrigger(found || null)
     } else {
       setTrigger(null)
     }
@@ -206,6 +213,18 @@ export default function ProjectDetail({ userId }) {
       .from('projects').update(payload)
       .eq('id', id).eq('user_id', userId).select().single()
     if (!error && data) { setProject(data); setEditing(false) }
+  }
+
+  async function saveTrigger(routineId) {
+    const newId = routineId || null
+    const { data, error } = await supabase
+      .from('projects').update({ trigger_id: newId, updated_at: new Date().toISOString() })
+      .eq('id', id).eq('user_id', userId).select().single()
+    if (!error && data) {
+      setProject(data)
+      setTrigger(triggerRoutines.find(t => t.id === newId) || null)
+    }
+    setEditingTrigger(false)
   }
 
   // ── Milestone CRUD ────────────────────────────────────────
@@ -358,6 +377,9 @@ export default function ProjectDetail({ userId }) {
                 <><span className="pd-date-sep">→</span><span className="pd-date">{fmtDate(project.end_date)}</span></>
               )}
             </div>
+            <button className="pd-mindmap-btn" onClick={() => setShowMindMap(true)}>
+              🗺️ Mind map
+            </button>
           </div>
         </div>
 
@@ -439,14 +461,34 @@ export default function ProjectDetail({ userId }) {
           </div>
         )}
 
-        {/* Activation trigger */}
+        {/* Activation trigger — editable */}
         <div className="pd-section">
-          <div className="pd-section-title">Activation trigger</div>
-          {trigger ? (
+          <div className="pd-section-header">
+            <div className="pd-section-title">Activation trigger</div>
+            {!editingTrigger && (
+              <button className="pd-section-add-btn" onClick={() => setEditingTrigger(true)}>
+                {trigger ? 'Change' : '+ Link trigger'}
+              </button>
+            )}
+          </div>
+
+          {editingTrigger ? (
+            <div className="pd-trigger-select">
+              <select className="focus-select" defaultValue={trigger?.id || ''}
+                onChange={e => saveTrigger(e.target.value || null)}>
+                <option value="">— No trigger —</option>
+                {triggerRoutines.map(t => (
+                  <option key={t.id} value={t.id}>{t.emoji} {t.name}</option>
+                ))}
+              </select>
+              <button className="modal-btn modal-btn-cancel" onClick={() => setEditingTrigger(false)}>Cancel</button>
+            </div>
+          ) : trigger ? (
             <div className="pd-trigger-chip">
               <span>{trigger.emoji}</span>
               <span>{trigger.name}</span>
               <span className="pd-trigger-tag">🕹️ Trigger</span>
+              <button className="ms-del-btn" onClick={() => saveTrigger(null)} title="Remove trigger">✕</button>
             </div>
           ) : (
             <div className="pd-empty-field">No trigger linked</div>
@@ -493,7 +535,8 @@ export default function ProjectDetail({ userId }) {
           </div>
         </div>
 
-        {/* Focus sessions */}
+        {/* FOCUS SESSIONS — moved below Tasks, see after tasks section */}
+        {false && (
         <div className="pd-section">
           <div className="pd-section-header">
             <div className="pd-section-title">Focus sessions</div>
@@ -568,6 +611,7 @@ export default function ProjectDetail({ userId }) {
             )
           })()}
         </div>
+        )} {/* end false && focus sessions placeholder */}
 
         {/* Tasks */}
         <div className="pd-section">
@@ -662,13 +706,99 @@ export default function ProjectDetail({ userId }) {
           )}
         </div>
 
-        {/* Mind map placeholder */}
-        <div className="pd-section pd-placeholder-section">
-          <div className="pd-section-title">Mind map</div>
-          <div className="pd-placeholder-chip">🗺️ Coming soon — visual mind map</div>
+        {/* Focus sessions */}
+        <div className="pd-section">
+          <div className="pd-section-header">
+            <div className="pd-section-title">Focus sessions</div>
+            <span className="pd-section-count">{focusSessions.length} sessions</span>
+          </div>
+
+          {focusSessions.length === 0 ? (
+            <div className="pd-empty-field">No focus sessions logged yet — start one from the Focus Session page</div>
+          ) : (() => {
+            const totalMins = focusSessions.reduce((a, s) => a + (s.duration_minutes || 0), 0)
+            const hours = Math.floor(totalMins / 60)
+            const mins  = totalMins % 60
+            const timeStr = hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ''}` : `${mins}m`
+
+            const TYPE_EMOJI = { deep_work:'🧠', study:'📚', creative:'🎨', admin:'📋', planning:'🗓️', other:'⚡' }
+            const TYPE_LABEL = { deep_work:'Deep Work', study:'Study', creative:'Creative', admin:'Admin', planning:'Planning', other:'Other' }
+
+            const byType = focusSessions.reduce((acc, s) => {
+              acc[s.session_type] = (acc[s.session_type] || 0) + 1
+              return acc
+            }, {})
+
+            return (
+              <>
+                <div className="pd-focus-stats">
+                  <div className="pd-focus-stat">
+                    <div className="pd-focus-stat-val">{focusSessions.length}</div>
+                    <div className="pd-focus-stat-lbl">sessions</div>
+                  </div>
+                  <div className="pd-focus-stat">
+                    <div className="pd-focus-stat-val">{timeStr}</div>
+                    <div className="pd-focus-stat-lbl">total time</div>
+                  </div>
+                  <div className="pd-focus-stat">
+                    <div className="pd-focus-stat-val">{Math.round(totalMins / focusSessions.length)}m</div>
+                    <div className="pd-focus-stat-lbl">avg session</div>
+                  </div>
+                </div>
+                <div className="pd-focus-types">
+                  {Object.entries(byType).map(([type, count]) => (
+                    <span key={type} className="pd-focus-type-chip">
+                      {TYPE_EMOJI[type] || '⚡'} {TYPE_LABEL[type] || type} <strong>{count}</strong>
+                    </span>
+                  ))}
+                </div>
+                <div className="pd-focus-list">
+                  {focusSessions.slice(0, 8).map(s => {
+                    const d = s.completed_at ? new Date(s.completed_at) : null
+                    const dateStr = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+                    const timeStr = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+                    return (
+                      <div key={s.id} className="pd-focus-row">
+                        <span className="pd-focus-emoji">{TYPE_EMOJI[s.session_type] || '⚡'}</span>
+                        <span className="pd-focus-type">{TYPE_LABEL[s.session_type] || s.session_type}</span>
+                        <span className="pd-focus-dur">{s.duration_minutes}m</span>
+                        <span className="pd-focus-date">{dateStr} {timeStr}</span>
+                        {s.notes && <span className="pd-focus-notes" title={s.notes}>📝</span>}
+                      </div>
+                    )
+                  })}
+                  {focusSessions.length > 8 && (
+                    <div className="pd-focus-more">+{focusSessions.length - 8} more sessions</div>
+                  )}
+                </div>
+              </>
+            )
+          })()}
         </div>
 
       </div>
+
+      {/* Mind map popup */}
+      {showMindMap && (
+        <div className="modal-overlay" onClick={() => setShowMindMap(false)}>
+          <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Mind map — {project.name}</h2>
+              <button className="modal-close" onClick={() => setShowMindMap(false)}>×</button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center', padding: '2.5rem 1.5rem' }}>
+              <div style={{ fontSize: 40, marginBottom: '1rem' }}>🗺️</div>
+              <p style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.6 }}>
+                Visual mind map is coming soon.<br />
+                It will let you branch out ideas, connections, and notes for this project.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setShowMindMap(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
