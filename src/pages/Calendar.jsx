@@ -290,9 +290,15 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
               <div key={r.id} className="cal-detail-item">
                 <div className="cdi-emoji">{r.emoji}</div>
                 <div className="cdi-info">
-                  <div className="cdi-name">{r.name}</div>
+                  <div className="cdi-name">
+                    {r.name}
+                    {r._logStatus && <span className="rout-done-tag">✓ done</span>}
+                  </div>
                   <div className="cdi-meta">
-                    {fmtTime(r.time)}
+                    {r._actualStart
+                      ? <>{r._actualStart}{r._actualEnd ? ` – ${r._actualEnd}` : ''} <span className="rout-actual-tag">actual</span></>
+                      : fmtTime(r.time)
+                    }
                     {r.steps?.length > 0 && <> · {r.steps.length} steps · {totalMins(r.steps)} min</>}
                   </div>
                   {r.type === 'trigger' && <span className="ec-trigger-tag">🕹️ Trigger</span>}
@@ -373,11 +379,17 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                   </div>
                 ))}
                 {dayRout.map(r => (
-                  <div key={r.id} className="week-event">
+                  <div key={r.id} className={`week-event${r._logStatus ? ' we-done' : ''}`}>
                     <span className="we-emoji">{r.emoji}</span>
                     <div className="we-body">
                       <div className="we-name">{r.name}</div>
-                      {r.time && <div className="we-time">{fmtTime(r.time)}</div>}
+                      <div className="we-time">
+                        {r._actualStart
+                          ? <>{r._actualStart}{r._actualEnd ? `–${r._actualEnd}` : ''}</>
+                          : fmtTime(r.time)
+                        }
+                        {r._logStatus && ' ✓'}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -822,9 +834,16 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
 
   const rawBlocks = [
     ...timedRout.map(r => {
-      const [h, m] = r.time.split(':').map(Number)
+      // Use actual logged start time if available, else fall back to scheduled time
+      const timeStr  = r._actualStart || r.time
+      const [h, m]   = timeStr.split(':').map(Number)
       const startMin = h * 60 + m
-      const durMin = Math.max(30, totalMins(r.steps))
+      // Use actual duration if end time logged, else estimate from steps
+      let durMin = Math.max(30, totalMins(r.steps))
+      if (r._actualStart && r._actualEnd) {
+        const [eh, em] = r._actualEnd.split(':').map(Number)
+        durMin = Math.max(30, (eh * 60 + em) - startMin)
+      }
       return { type: 'routine', startMin, durMin, data: r, key: `r-${r.id}` }
     }),
     ...timedGCal.map(e => {
@@ -1142,6 +1161,7 @@ export default function Calendar({ userId }) {
   const [editingEvent,   setEditingEvent]  = useState(null)
   const [tasks,          setTasks]          = useState([])
   const [taskCategories, setTaskCategories] = useState([])
+  const [routineLogs,    setRoutineLogs]    = useState([])
 
   // Google Calendar state
   const [gisReady,    setGisReady]    = useState(false)
@@ -1202,6 +1222,18 @@ export default function Calendar({ userId }) {
       })
   }, [userId])
 
+  // Load routine logs (rolling 60-day window) so calendar can show actual times
+  useEffect(() => {
+    if (!userId) return
+    const from = new Date(); from.setDate(from.getDate() - 60)
+    supabase.from('routine_logs')
+      .select('routine_id, started_at, ended_at, status')
+      .eq('user_id', userId)
+      .gte('started_at', from.toISOString())
+      .in('status', ['completed', 'marked_done'])
+      .then(({ data }) => setRoutineLogs(data || []))
+  }, [userId])
+
   const fetchGcalEvents = useCallback(async (token) => {
     setGcalLoading(true)
     setGcalError('')
@@ -1234,10 +1266,28 @@ export default function Calendar({ userId }) {
   }
 
   function routinesForDate(date) {
-    const dow = DOW_KEYS[date.getDay()]
+    const dow     = DOW_KEYS[date.getDay()]
+    const dateStr = formatDateForInput(date)
     return routines
       .filter(r => r.days?.includes(dow))
       .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'))
+      .map(r => {
+        const log = routineLogs.find(l =>
+          l.routine_id === r.id && l.started_at?.startsWith(dateStr)
+        )
+        if (!log) return r
+        // Attach actual times so views can display them
+        const toHHMM = ts => {
+          const d = new Date(ts)
+          return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+        }
+        return {
+          ...r,
+          _actualStart: toHHMM(log.started_at),
+          _actualEnd:   log.ended_at ? toHHMM(log.ended_at) : null,
+          _logStatus:   log.status,
+        }
+      })
   }
 
   function customEventsForDate(date) {

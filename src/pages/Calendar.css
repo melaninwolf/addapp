@@ -628,6 +628,30 @@
   padding: 1px 6px;
 }
 
+/* ── Routine log annotations ──────────────────────────────── */
+.rout-done-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.rout-actual-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 4px;
+}
+
+.we-done { opacity: 0.7; }
+
 /* ── WEEK VIEW ────────────────────────────────────────────── */
 .cal-week-layout { }
 

@@ -383,24 +383,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
         .update({ status: 'completed', ended_at: endedAt })
         .eq('id', logId)
     }
-    writeCalendarEvent(startedAt, endedAt)
   }, [finished]) // eslint-disable-line
-
-  async function writeCalendarEvent(startTs, endTs) {
-    if (!userId) return
-    const toHHMM = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-    const startDate = new Date(startTs)
-    const endDate   = new Date(endTs)
-    await supabase.from('calendar_events').insert({
-      user_id:    userId,
-      title:      `${routine.emoji || '⚡'} ${routine.name}`,
-      date:       startTs.split('T')[0],
-      start_time: toHHMM(startDate),
-      end_time:   toHHMM(endDate),
-      type:       'event',
-      notes:      'Routine completed',
-    })
-  }
 
   // Keep logId current for auto-pause effect (update DB with step position)
   useEffect(() => {
@@ -866,15 +849,6 @@ export default function Routines({ userId }) {
       user_id: userId, routine_id: r.id,
       started_at: startTs, ended_at: endTs,
       status: 'marked_done', step_index: r.steps.length,
-    })
-    await supabase.from('calendar_events').insert({
-      user_id: userId,
-      title:      `${r.emoji || '⚡'} ${r.name}`,
-      date:       dateStr,
-      start_time: toHHMM(startDate),
-      end_time:   toHHMM(endDate),
-      type:       'event',
-      notes:      'Routine marked as done',
     })
 
     setTodayLogs(prev => [...prev, { routine_id: r.id, status: 'marked_done' }])
