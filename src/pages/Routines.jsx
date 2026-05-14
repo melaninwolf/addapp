@@ -87,6 +87,18 @@ function RoutineModal({ routine, onSave, onClose }) {
   const [steps, setSteps] = useState(
     routine?.steps.map(s => ({ ...s })) || [{ id: Date.now(), name: '', dur: 5 }]
   )
+  const [dragIdx,     setDragIdx]     = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
+
+  function moveStep(from, to) {
+    if (from === to) return
+    setSteps(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
 
   function addStep() {
     if (type === 'trigger' && steps.length >= 5) return
@@ -181,7 +193,16 @@ function RoutineModal({ routine, onSave, onClose }) {
           <div className="steps-section">
             <label className="steps-label">Steps</label>
             {steps.map((s, i) => (
-              <div key={s.id} className="step-edit-row">
+              <div
+                key={s.id}
+                className={`step-edit-row${dragIdx === i ? ' step-dragging' : ''}${dragOverIdx === i && dragIdx !== i ? ' step-drag-over' : ''}`}
+                draggable
+                onDragStart={() => setDragIdx(i)}
+                onDragOver={e => { e.preventDefault(); setDragOverIdx(i) }}
+                onDrop={() => { moveStep(dragIdx, i); setDragIdx(null); setDragOverIdx(null) }}
+                onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
+              >
+                <span className="step-drag-handle" title="Drag to reorder">⠿</span>
                 <span className="step-num">{i + 1}</span>
                 <input
                   className="step-name-input"
