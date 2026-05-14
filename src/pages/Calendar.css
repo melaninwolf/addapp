@@ -652,6 +652,38 @@
 
 .we-done { opacity: 0.7; }
 
+/* Edit session times button — shown on routine blocks/rows that have a log */
+.cal-log-edit-btn {
+  flex-shrink: 0;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+/* In flex rows, push to the right */
+.cal-detail-item .cal-log-edit-btn,
+.week-event .cal-log-edit-btn {
+  margin-left: auto;
+  align-self: center;
+}
+/* In the day event block (absolutely positioned), pin to top-right */
+.day-event-block .cal-log-edit-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+.cal-detail-item:hover .cal-log-edit-btn,
+.week-event:hover .cal-log-edit-btn,
+.day-event-block:hover .cal-log-edit-btn {
+  opacity: 1;
+}
+.cal-log-edit-btn:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+
 /* ── WEEK VIEW ────────────────────────────────────────────── */
 .cal-week-layout { }
 

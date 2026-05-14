@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import Home     from './pages/Home.jsx'
 import Routines from './pages/Routines.jsx'
 import Calendar from './pages/Calendar.jsx'
 import Tasks         from './pages/Tasks.jsx'
@@ -135,6 +136,13 @@ function AppShell({ user }) {
         <div className="nav-links">
           <NavLink to="/" end
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Home' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">🏠</span>
+            {showFull && <span>Home</span>}
+          </NavLink>
+
+          <NavLink to="/routines"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
             title={!showFull ? 'Routines' : undefined} onClick={closeDrawer}>
             <span className="nav-icon">⚡</span>
             {showFull && <span>Routines</span>}
@@ -207,7 +215,8 @@ function AppShell({ user }) {
 
       <main className="main">
         <Routes>
-          <Route path="/"         element={<Routines userId={user?.id} />} />
+          <Route path="/"          element={<Home     userId={user?.id} />} />
+          <Route path="/routines" element={<Routines userId={user?.id} />} />
           <Route path="/calendar" element={<Calendar userId={user?.id} />} />
           <Route path="/tasks"        element={<Tasks         userId={user?.id} />} />
           <Route path="/projects"     element={<Projects      userId={user?.id} />} />

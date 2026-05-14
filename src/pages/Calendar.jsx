@@ -173,7 +173,7 @@ function GCalEventCard({ event }) {
 }
 
 // ─── MONTH VIEW ───────────────────────────────────────────────
-function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onViewEvent }) {
+function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onViewEvent, onEditLog }) {
   const [year,  setYear]  = useState(selected.getFullYear())
   const [month, setMonth] = useState(selected.getMonth())
 
@@ -303,6 +303,9 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
                   </div>
                   {r.type === 'trigger' && <span className="ec-trigger-tag">🕹️ Trigger</span>}
                 </div>
+                {r._logId && (
+                  <button className="cal-log-edit-btn" onClick={() => onEditLog && onEditLog(r)} title="Edit session times">✏️</button>
+                )}
               </div>
             ))}
           </div>
@@ -313,7 +316,7 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
 }
 
 // ─── WEEK VIEW ────────────────────────────────────────────────
-function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate }) {
+function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onEditLog }) {
   const [anchor, setAnchor] = useState(() => new Date(selected))
   const weekDays = getWeekDays(anchor)
 
@@ -391,6 +394,9 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                         {r._logStatus && ' ✓'}
                       </div>
                     </div>
+                    {r._logId && (
+                      <button className="cal-log-edit-btn" onClick={e => { e.stopPropagation(); onEditLog && onEditLog(r) }} title="Edit session times">✏️</button>
+                    )}
                   </div>
                 ))}
                 {dayRout.length === 0 && dayGCal.length === 0 && dayCustom.length === 0 && dayTasks.length === 0 && <div className="week-no-rout" />}
@@ -794,7 +800,7 @@ function hourLabel(h) {
   return `${h - 12} PM`
 }
 
-function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onUpdateEvent, onViewEvent }) {
+function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onUpdateEvent, onViewEvent, onEditLog }) {
   const [now, setNow] = useState(() => new Date())
   const scrollRef = useRef(null)
   const dragRef   = useRef(null)
@@ -1073,6 +1079,9 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                           <div className="deb-meta">🕹️ Trigger</div>
                         )}
                       </div>
+                      {block.data._logId && (
+                        <button className="cal-log-edit-btn" onClick={e => { e.stopPropagation(); onEditLog && onEditLog(block.data) }} title="Edit session times">✏️</button>
+                      )}
                     </>
                   ) : block.type === 'gcal' ? (
                     <>
@@ -1162,6 +1171,9 @@ export default function Calendar({ userId }) {
   const [tasks,          setTasks]          = useState([])
   const [taskCategories, setTaskCategories] = useState([])
   const [routineLogs,    setRoutineLogs]    = useState([])
+  const [editLogModal,   setEditLogModal]   = useState(null) // null | { logId, name, emoji, dateStr, startHHMM, endHHMM }
+  const [editLogStart,   setEditLogStart]   = useState('')
+  const [editLogEnd,     setEditLogEnd]     = useState('')
 
   // Google Calendar state
   const [gisReady,    setGisReady]    = useState(false)
@@ -1227,7 +1239,7 @@ export default function Calendar({ userId }) {
     if (!userId) return
     const from = new Date(); from.setDate(from.getDate() - 60)
     supabase.from('routine_logs')
-      .select('routine_id, started_at, ended_at, status')
+      .select('id, routine_id, started_at, ended_at, status')
       .eq('user_id', userId)
       .gte('started_at', from.toISOString())
       .in('status', ['completed', 'marked_done'])
@@ -1283,11 +1295,39 @@ export default function Calendar({ userId }) {
         }
         return {
           ...r,
+          _logId:       log.id,
           _actualStart: toHHMM(log.started_at),
           _actualEnd:   log.ended_at ? toHHMM(log.ended_at) : null,
           _logStatus:   log.status,
         }
       })
+  }
+
+  function openCalEditLog(r) {
+    if (!r._logId) return
+    setEditLogStart(r._actualStart || '')
+    setEditLogEnd(r._actualEnd || '')
+    setEditLogModal({ logId: r._logId, name: r.name, emoji: r.emoji })
+  }
+
+  async function saveCalEditLog() {
+    if (!editLogModal) return
+    const toISO = (hhmm, refDate) => {
+      if (!hhmm) return null
+      const [h, m] = hhmm.split(':').map(Number)
+      const d = new Date(refDate); d.setHours(h, m, 0, 0)
+      return d.toISOString()
+    }
+    const ref = selected // use currently selected date as date reference
+    const updates = {
+      started_at: toISO(editLogStart, ref),
+      ended_at:   toISO(editLogEnd, ref) || null,
+    }
+    await supabase.from('routine_logs').update(updates).eq('id', editLogModal.logId)
+    setRoutineLogs(prev => prev.map(l =>
+      l.id === editLogModal.logId ? { ...l, ...updates } : l
+    ))
+    setEditLogModal(null)
   }
 
   function customEventsForDate(date) {
@@ -1446,17 +1486,18 @@ export default function Calendar({ userId }) {
         <MonthView today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
           customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
-          onViewEvent={handleViewEvent} />
+          onViewEvent={handleViewEvent} onEditLog={openCalEditLog} />
       ) : view === 'week' ? (
         <WeekView  today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
-          customEventsForDate={customEventsForDate} tasksForDate={tasksForDate} />
+          customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
+          onEditLog={openCalEditLog} />
       ) : (
         <DayView   today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
           customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
           onUpdateEvent={updateCalendarEvent}
-          onViewEvent={handleViewEvent} />
+          onViewEvent={handleViewEvent} onEditLog={openCalEditLog} />
       )}
 
       {/* Add modal */}
@@ -1483,6 +1524,35 @@ export default function Calendar({ userId }) {
         onDelete={() => deleteCalendarEvent(editingEvent.id)}
         initialEvent={editingEvent}
       />
+
+      {/* Edit routine log times modal */}
+      {editLogModal && (
+        <div className="modal-overlay" onClick={() => setEditLogModal(null)}>
+          <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Edit session times</h2>
+              <button className="modal-close" onClick={() => setEditLogModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
+                {editLogModal.emoji} <strong>{editLogModal.name}</strong>
+              </p>
+              <div className="field">
+                <label>Start time</label>
+                <input type="time" value={editLogStart} onChange={e => setEditLogStart(e.target.value)} />
+              </div>
+              <div className="field" style={{marginTop:'0.75rem'}}>
+                <label>End time</label>
+                <input type="time" value={editLogEnd} onChange={e => setEditLogEnd(e.target.value)} />
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="modal-btn modal-btn-cancel" onClick={() => setEditLogModal(null)}>Cancel</button>
+              <button className="modal-btn modal-btn-save" onClick={saveCalEditLog}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

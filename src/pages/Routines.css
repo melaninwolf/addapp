@@ -94,6 +94,12 @@
   background: color-mix(in srgb, var(--green) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
   border-radius: 20px; padding: 2px 8px; white-space: nowrap;
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+  font-family: inherit; line-height: inherit;
+}
+.rc-done-badge:hover {
+  background: color-mix(in srgb, var(--green) 20%, transparent);
+  color: var(--green);
 }
 
 /* ── Restart prompt ── */

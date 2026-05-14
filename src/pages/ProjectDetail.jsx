@@ -121,6 +121,9 @@ export default function ProjectDetail({ userId }) {
   const [newMsDue, setNewMsDue] = useState('')
   const [addingMs, setAddingMs] = useState(false)
 
+  // Focus sessions
+  const [focusSessions, setFocusSessions] = useState([])
+
   // Task management
   const [addingTask,      setAddingTask]      = useState(false)
   const [newTaskTitle,    setNewTaskTitle]    = useState('')
@@ -128,6 +131,17 @@ export default function ProjectDetail({ userId }) {
   const [showAssign,      setShowAssign]      = useState(false)
   const [unassignedTasks, setUnassignedTasks] = useState([])
   const [assignSearch,    setAssignSearch]    = useState('')
+
+  const loadFocusSessions = useCallback(async () => {
+    if (!userId || !id) return
+    const { data } = await supabase
+      .from('focus_sessions')
+      .select('id, session_type, duration_minutes, started_at, completed_at, notes')
+      .eq('user_id', userId)
+      .eq('project_id', id)
+      .order('completed_at', { ascending: false })
+    setFocusSessions(data || [])
+  }, [userId, id])
 
   const load = useCallback(async () => {
     if (!userId || !id) return
@@ -156,7 +170,16 @@ export default function ProjectDetail({ userId }) {
     setLoading(false)
   }, [userId, id])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); loadFocusSessions() }, [load, loadFocusSessions])
+
+  // Refresh focus sessions when one is saved from the Focus Session page
+  useEffect(() => {
+    function handleSaved(e) {
+      if (e.detail?.projectId === id) loadFocusSessions()
+    }
+    window.addEventListener('focus-session-saved', handleSaved)
+    return () => window.removeEventListener('focus-session-saved', handleSaved)
+  }, [id, loadFocusSessions])
 
   function startEdit() {
     if (!project) return
@@ -470,10 +493,80 @@ export default function ProjectDetail({ userId }) {
           </div>
         </div>
 
-        {/* Focus sessions placeholder */}
-        <div className="pd-section pd-placeholder-section">
-          <div className="pd-section-title">Focus sessions</div>
-          <div className="pd-placeholder-chip">🎯 Coming soon — links to Focus Sessions</div>
+        {/* Focus sessions */}
+        <div className="pd-section">
+          <div className="pd-section-header">
+            <div className="pd-section-title">Focus sessions</div>
+            <span className="pd-section-count">{focusSessions.length} sessions</span>
+          </div>
+
+          {focusSessions.length === 0 ? (
+            <div className="pd-empty-field">No focus sessions logged yet — start one from the Focus Session page</div>
+          ) : (() => {
+            const totalMins = focusSessions.reduce((a, s) => a + (s.duration_minutes || 0), 0)
+            const hours = Math.floor(totalMins / 60)
+            const mins  = totalMins % 60
+            const timeStr = hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ''}` : `${mins}m`
+
+            const TYPE_EMOJI = { deep_work:'🧠', study:'📚', creative:'🎨', admin:'📋', planning:'🗓️', other:'⚡' }
+            const TYPE_LABEL = { deep_work:'Deep Work', study:'Study', creative:'Creative', admin:'Admin', planning:'Planning', other:'Other' }
+
+            // Count by type
+            const byType = focusSessions.reduce((acc, s) => {
+              acc[s.session_type] = (acc[s.session_type] || 0) + 1
+              return acc
+            }, {})
+
+            return (
+              <>
+                {/* Stats row */}
+                <div className="pd-focus-stats">
+                  <div className="pd-focus-stat">
+                    <div className="pd-focus-stat-val">{focusSessions.length}</div>
+                    <div className="pd-focus-stat-lbl">sessions</div>
+                  </div>
+                  <div className="pd-focus-stat">
+                    <div className="pd-focus-stat-val">{timeStr}</div>
+                    <div className="pd-focus-stat-lbl">total time</div>
+                  </div>
+                  <div className="pd-focus-stat">
+                    <div className="pd-focus-stat-val">{Math.round(totalMins / focusSessions.length)}m</div>
+                    <div className="pd-focus-stat-lbl">avg session</div>
+                  </div>
+                </div>
+
+                {/* Type breakdown */}
+                <div className="pd-focus-types">
+                  {Object.entries(byType).map(([type, count]) => (
+                    <span key={type} className="pd-focus-type-chip">
+                      {TYPE_EMOJI[type] || '⚡'} {TYPE_LABEL[type] || type} <strong>{count}</strong>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Recent sessions */}
+                <div className="pd-focus-list">
+                  {focusSessions.slice(0, 8).map(s => {
+                    const d = s.completed_at ? new Date(s.completed_at) : null
+                    const dateStr = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+                    const timeStr = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+                    return (
+                      <div key={s.id} className="pd-focus-row">
+                        <span className="pd-focus-emoji">{TYPE_EMOJI[s.session_type] || '⚡'}</span>
+                        <span className="pd-focus-type">{TYPE_LABEL[s.session_type] || s.session_type}</span>
+                        <span className="pd-focus-dur">{s.duration_minutes}m</span>
+                        <span className="pd-focus-date">{dateStr} {timeStr}</span>
+                        {s.notes && <span className="pd-focus-notes" title={s.notes}>📝</span>}
+                      </div>
+                    )
+                  })}
+                  {focusSessions.length > 8 && (
+                    <div className="pd-focus-more">+{focusSessions.length - 8} more sessions</div>
+                  )}
+                </div>
+              </>
+            )
+          })()}
         </div>
 
         {/* Tasks */}

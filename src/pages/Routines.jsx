@@ -764,8 +764,11 @@ export default function Routines({ userId }) {
   const [running, setRunning] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // null | routine obj
   const [markDoneModal, setMarkDoneModal] = useState(null) // null | routine obj
-  const [markDoneTime, setMarkDoneTime] = useState('')
-  const [todayLogs, setTodayLogs] = useState([]) // { routine_id, status }[]
+  const [markDoneTime, setMarkDoneTime]   = useState('')
+  const [todayLogs, setTodayLogs]         = useState([]) // { id, routine_id, status, started_at, ended_at }[]
+  const [editLogModal, setEditLogModal]   = useState(null) // null | { log, routine }
+  const [editLogStart, setEditLogStart]   = useState('')
+  const [editLogEnd,   setEditLogEnd]     = useState('')
 
   // Load routines from Supabase on mount
   useEffect(() => {
@@ -787,7 +790,7 @@ export default function Routines({ userId }) {
     if (!userId) return
     const todayStr = new Date().toISOString().split('T')[0]
     supabase.from('routine_logs')
-      .select('routine_id, status')
+      .select('id, routine_id, status, started_at, ended_at')
       .eq('user_id', userId)
       .gte('started_at', todayStr + 'T00:00:00.000Z')
       .lte('started_at', todayStr + 'T23:59:59.999Z')
@@ -845,14 +848,55 @@ export default function Routines({ userId }) {
     const toHHMM  = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
     const dateStr = startTs.split('T')[0]
 
-    await supabase.from('routine_logs').insert({
+    const { data: newLog } = await supabase.from('routine_logs').insert({
       user_id: userId, routine_id: r.id,
       started_at: startTs, ended_at: endTs,
       status: 'marked_done', step_index: r.steps.length,
-    })
+    }).select('id').single()
 
-    setTodayLogs(prev => [...prev, { routine_id: r.id, status: 'marked_done' }])
+    setTodayLogs(prev => [...prev, { id: newLog?.id, routine_id: r.id, status: 'marked_done' }])
     setMarkDoneModal(null)
+  }
+
+  async function undoMarkDone(routineId) {
+    const log = todayLogs.find(l => l.routine_id === routineId && l.status === 'marked_done')
+    if (!log?.id) return
+    await supabase.from('routine_logs').delete().eq('id', log.id)
+    setTodayLogs(prev => prev.filter(l => l.routine_id !== routineId))
+  }
+
+  function openEditLog(routine) {
+    const log = todayLogs.find(l => l.routine_id === routine.id)
+    if (!log) return
+    const toHHMM = ts => {
+      if (!ts) return ''
+      const d = new Date(ts)
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    }
+    setEditLogStart(toHHMM(log.started_at))
+    setEditLogEnd(toHHMM(log.ended_at))
+    setEditLogModal({ log, routine })
+  }
+
+  async function saveEditLog() {
+    if (!editLogModal) return
+    const { log } = editLogModal
+    const today = new Date()
+    const toISO = (hhmm) => {
+      if (!hhmm) return null
+      const [h, m] = hhmm.split(':').map(Number)
+      const d = new Date(today); d.setHours(h, m, 0, 0)
+      return d.toISOString()
+    }
+    const updates = {
+      started_at: toISO(editLogStart) || log.started_at,
+      ended_at:   toISO(editLogEnd)   || null,
+    }
+    await supabase.from('routine_logs').update(updates).eq('id', log.id)
+    setTodayLogs(prev => prev.map(l =>
+      l.id === log.id ? { ...l, ...updates } : l
+    ))
+    setEditLogModal(null)
   }
 
   if (running) {
@@ -903,7 +947,12 @@ export default function Routines({ userId }) {
                 <div className="rc-name-row">
                   <div className="rc-name">{r.name}</div>
                   {r.type === 'trigger' && <span className="rc-trigger-badge">🕹️ Trigger</span>}
-                  {isDoneToday && <span className="rc-done-badge">✓ done today</span>}
+                  {isDoneToday && todayLog.status === 'marked_done' && (
+                    <button className="rc-done-badge" onClick={() => undoMarkDone(r.id)} title="Click to undo">✓ done today ↩</button>
+                  )}
+                  {isDoneToday && todayLog.status === 'completed' && (
+                    <span className="rc-done-badge">✓ done today</span>
+                  )}
                 </div>
                 <div className="rc-meta">{fmtTime(r.time)} &middot; {fmtDays(r.days)}</div>
                 <div className="rc-meta">{r.steps.length} steps &middot; {totalMins(r.steps)} min</div>
@@ -926,6 +975,9 @@ export default function Routines({ userId }) {
               <button className="btn-ghost btn-sm" onClick={() => setModal(r)}>Edit</button>
               {!isDoneToday && (
                 <button className="btn-ghost btn-sm" onClick={() => openMarkDone(r)} title="Log as done without running">✓ Mark done</button>
+              )}
+              {todayLog && (
+                <button className="btn-ghost btn-sm" onClick={() => openEditLog(r)} title="Edit start/end times">✏️ Times</button>
               )}
               <button className="btn-danger btn-sm" onClick={() => setDeleteConfirm(r)}>Delete</button>
             </div>
@@ -973,6 +1025,34 @@ export default function Routines({ userId }) {
             <div className="modal-foot">
               <button className="btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button className="btn-danger" onClick={() => { deleteRoutine(deleteConfirm.id); setDeleteConfirm(null) }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editLogModal && (
+        <div className="modal-overlay" onClick={() => setEditLogModal(null)}>
+          <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Edit session times</h2>
+              <button className="modal-close" onClick={() => setEditLogModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
+                {editLogModal.routine.emoji} <strong>{editLogModal.routine.name}</strong>
+              </p>
+              <div className="field">
+                <label>Start time</label>
+                <input type="time" value={editLogStart} onChange={e => setEditLogStart(e.target.value)} />
+              </div>
+              <div className="field" style={{marginTop:'0.75rem'}}>
+                <label>End time</label>
+                <input type="time" value={editLogEnd} onChange={e => setEditLogEnd(e.target.value)} />
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setEditLogModal(null)}>Cancel</button>
+              <button className="btn-primary" onClick={saveEditLog}>Save</button>
             </div>
           </div>
         </div>
