@@ -121,6 +121,14 @@ export default function ProjectDetail({ userId }) {
   const [newMsDue, setNewMsDue] = useState('')
   const [addingMs, setAddingMs] = useState(false)
 
+  // Task management
+  const [addingTask,      setAddingTask]      = useState(false)
+  const [newTaskTitle,    setNewTaskTitle]    = useState('')
+  const [newTaskPri,      setNewTaskPri]      = useState('medium')
+  const [showAssign,      setShowAssign]      = useState(false)
+  const [unassignedTasks, setUnassignedTasks] = useState([])
+  const [assignSearch,    setAssignSearch]    = useState('')
+
   const load = useCallback(async () => {
     if (!userId || !id) return
     const [projRes, msRes, taskRes] = await Promise.all([
@@ -233,6 +241,56 @@ export default function ProjectDetail({ userId }) {
         x.id === mm.id ? { ...x, done: newDone } : x
       ),
     })))
+  }
+
+  // ── Task functions ────────────────────────────────────────
+  async function createTask() {
+    if (!newTaskTitle.trim()) return
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert([{
+        title:      newTaskTitle.trim(),
+        project_id: id,
+        user_id:    userId,
+        status:     'todo',
+        priority:   newTaskPri,
+        sort_order: tasks.length * 10,
+      }])
+      .select()
+    if (!error && data) {
+      setTasks(prev => [...prev, data[0]])
+      setNewTaskTitle('')
+      setNewTaskPri('medium')
+      setAddingTask(false)
+    }
+  }
+
+  async function loadUnassigned() {
+    const { data } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .is('project_id', null)
+      .neq('status', 'done')
+    setUnassignedTasks(data || [])
+    setShowAssign(true)
+  }
+
+  async function assignExistingTask(task) {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ project_id: id })
+      .eq('id', task.id)
+      .select()
+    if (!error && data) {
+      setTasks(prev => [...prev, data[0]])
+      setUnassignedTasks(prev => prev.filter(t => t.id !== task.id))
+    }
+  }
+
+  async function removeTaskFromProject(taskId) {
+    await supabase.from('tasks').update({ project_id: null }).eq('id', taskId)
+    setTasks(prev => prev.filter(t => t.id !== taskId))
   }
 
   // ─────────────────────────────────────────────────────────
@@ -422,11 +480,75 @@ export default function ProjectDetail({ userId }) {
         <div className="pd-section">
           <div className="pd-section-header">
             <div className="pd-section-title">Tasks</div>
-            <span className="pd-section-count">{doneTasks}/{tasks.length}</span>
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <span className="pd-section-count">{doneTasks}/{tasks.length}</span>
+              <button className="pd-section-add-btn" onClick={() => { setAddingTask(true); setShowAssign(false) }}>+ New task</button>
+              <button className="pd-section-add-btn" onClick={loadUnassigned}>Assign existing</button>
+            </div>
           </div>
-          {tasks.length === 0 ? (
-            <div className="pd-empty-field">No tasks linked yet — assign tasks to this project from the Tasks board</div>
-          ) : (
+
+          {/* Quick-add task form */}
+          {addingTask && (
+            <div className="pd-task-add-form">
+              <input
+                className="modal-input"
+                placeholder="Task title"
+                value={newTaskTitle}
+                onChange={e => setNewTaskTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') createTask(); if (e.key === 'Escape') setAddingTask(false) }}
+                autoFocus
+              />
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                {[{key:'high',color:'#ef4444'},{key:'medium',color:'#f59e0b'},{key:'low',color:'#4ade80'}].map(p => (
+                  <button key={p.key}
+                    className={`proj-status-btn${newTaskPri === p.key ? ' active' : ''}`}
+                    style={{ '--s-color': p.color, fontSize:11 }}
+                    onClick={() => setNewTaskPri(p.key)}>
+                    {p.key}
+                  </button>
+                ))}
+                <div style={{ flex:1 }} />
+                <button className="modal-btn modal-btn-save" onClick={createTask}>Add</button>
+                <button className="modal-btn modal-btn-cancel" onClick={() => { setAddingTask(false); setNewTaskTitle('') }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Assign existing picker */}
+          {showAssign && (
+            <div className="pd-assign-wrap">
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                <input
+                  className="modal-input"
+                  placeholder="Search tasks…"
+                  value={assignSearch}
+                  onChange={e => setAssignSearch(e.target.value)}
+                  autoFocus
+                />
+                <button className="modal-btn modal-btn-cancel" onClick={() => { setShowAssign(false); setAssignSearch('') }}>✕</button>
+              </div>
+              {unassignedTasks.length === 0 ? (
+                <div className="pd-empty-field">No unassigned tasks found</div>
+              ) : (
+                <div className="pd-assign-list">
+                  {unassignedTasks
+                    .filter(t => !assignSearch || t.title.toLowerCase().includes(assignSearch.toLowerCase()))
+                    .map(t => (
+                      <div key={t.id} className="pd-assign-row" onClick={() => assignExistingTask(t)}>
+                        <span className="pd-task-name">{t.title}</span>
+                        <span className="pd-assign-add">+ assign</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tasks.length === 0 && !addingTask && !showAssign && (
+            <div className="pd-empty-field">No tasks yet — create one or assign from existing</div>
+          )}
+
+          {tasks.length > 0 && (
             <div className="pd-task-list">
               {tasks.map(t => (
                 <div key={t.id} className={`pd-task-row${t.status === 'done' ? ' pd-task-done' : ''}`}>
@@ -440,6 +562,7 @@ export default function ProjectDetail({ userId }) {
                   <span className="pd-task-name">{t.title}</span>
                   {t.due_date && <span className="pd-task-due">{fmtDate(t.due_date)}</span>}
                   <span className={`pd-task-status-badge pd-task-${t.status}`}>{t.status.replace('_', ' ')}</span>
+                  <button className="ms-del-btn" style={{ opacity:1 }} onClick={() => removeTaskFromProject(t.id)} title="Remove from project">✕</button>
                 </div>
               ))}
             </div>

@@ -829,6 +829,144 @@
 .pd-task-in_progress{ background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
 .pd-task-done       { background: color-mix(in srgb, var(--green) 12%, transparent); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); }
 
+/* ── Task assignment UI ─────────────────────────────────────── */
+.pd-task-add-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: var(--bg2);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.pd-task-add-form input[type="text"] {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: var(--card);
+  color: var(--text1);
+  font-size: 13px;
+  outline: none;
+}
+
+.pd-task-add-form input[type="text"]:focus {
+  border-color: var(--accent);
+}
+
+.pd-task-add-form select {
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: var(--card);
+  color: var(--text2);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.pd-task-add-form button {
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.pd-task-add-form button:disabled { opacity: 0.5; cursor: default; }
+
+.pd-task-add-form .cancel-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+}
+
+.pd-task-remove-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: color 0.12s, opacity 0.12s;
+}
+
+.pd-task-row:hover .pd-task-remove-btn { opacity: 1; }
+.pd-task-remove-btn:hover { color: var(--red); }
+
+.pd-assign-wrap {
+  margin-bottom: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pd-assign-wrap input[type="text"] {
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border2);
+  background: var(--card);
+  color: var(--text1);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pd-assign-wrap input[type="text"]::placeholder { color: var(--text3); }
+
+.pd-assign-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.pd-assign-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--border1);
+}
+
+.pd-assign-row:last-child { border-bottom: none; }
+.pd-assign-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+.pd-assign-row span {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text1);
+}
+
+.pd-assign-row .assign-plus,
+.pd-assign-row .pd-assign-add {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pd-assign-empty {
+  padding: 16px 12px;
+  font-size: 13px;
+  color: var(--text3);
+  font-style: italic;
+  text-align: center;
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .projects-page,
