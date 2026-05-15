@@ -173,3 +173,377 @@
   font-family: inherit;
 }
 .hlog-toggle-btn:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── Slider ── */
+.hlog-slider-row { display: flex; align-items: center; gap: 10px; }
+.hlog-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.hlog-num-sm { width: 64px; text-align: center; }
+.hlog-emoji  { font-size: 20px; flex-shrink: 0; }
+.hlog-sleep-badge { font-size: 12px; font-weight: 700; flex-shrink: 0; }
+
+/* ── Sleep time row ── */
+.hlog-sleep-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hlog-time-group { display: flex; flex-direction: column; gap: 4px; }
+.hlog-time-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.hlog-time       { width: 130px; }
+.hlog-arrow      { font-size: 18px; color: var(--text3); padding-bottom: 6px; }
+.hlog-sleep-calc { font-size: 13px; font-weight: 700; color: var(--accent); padding-bottom: 6px; }
+
+/* ── Workout detail ── */
+.hlog-workout-detail { display: flex; flex-direction: column; gap: 4px; padding-left: 2px; }
+
+/* ── Unit toggle (kg/lb) ── */
+.hlog-unit-toggle { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--border2); flex-shrink: 0; }
+.hlog-unit-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg3);
+  color: var(--text2);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.hlog-unit-btn.active { background: var(--accent); color: #fff; }
+
+/* ── My Medications section ───────────────────────────────── */
+.health-meds-section {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.health-meds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.health-meds-empty {
+  font-size: 13px;
+  color: var(--text3);
+  padding: 12px 0;
+}
+.health-med-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.health-med-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.health-med-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.health-med-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.health-med-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.health-med-chip {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+.health-med-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Med form (add / edit inline) ────────────────────────── */
+.med-form {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.med-schedule-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.med-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Per-medication rows in log modal ────────────────────── */
+.hlog-med-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hlog-med-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.hlog-med-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.hlog-med-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.hlog-med-sub {
+  font-size: 11px;
+  color: var(--text3);
+}
+.hlog-med-btns {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.hlog-med-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+}
+.hlog-med-btn.taken:hover  { border-color: #22d3ee; color: #22d3ee; }
+.hlog-med-btn.missed:hover { border-color: #ef4444; color: #ef4444; }
+.hlog-med-btn.taken.active  { background: #22d3ee22; border-color: #22d3ee; color: #22d3ee; }
+.hlog-med-btn.missed.active { background: #ef444422; border-color: #ef4444; color: #ef4444; }
+
+/* ── Small button variant ─────────────────────────────────── */
+.btn-sm { padding: 5px 12px !important; font-size: 12px !important; }
+
+/* ── Slider ── */
+.hlog-slider-row { display: flex; align-items: center; gap: 10px; }
+.hlog-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.hlog-num-sm { width: 64px; text-align: center; }
+.hlog-emoji  { font-size: 20px; flex-shrink: 0; }
+.hlog-sleep-badge { font-size: 12px; font-weight: 700; flex-shrink: 0; }
+
+/* ── Sleep time row ── */
+.hlog-sleep-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hlog-time-group { display: flex; flex-direction: column; gap: 4px; }
+.hlog-time-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.hlog-time       { width: 130px; }
+.hlog-arrow      { font-size: 18px; color: var(--text3); padding-bottom: 6px; }
+.hlog-sleep-calc { font-size: 13px; font-weight: 700; color: var(--accent); padding-bottom: 6px; }
+
+/* ── Workout detail ── */
+.hlog-workout-detail { display: flex; flex-direction: column; gap: 4px; padding-left: 2px; }
+
+/* ── Unit toggle (kg/lb) ── */
+.hlog-unit-toggle { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--border2); flex-shrink: 0; }
+.hlog-unit-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg3);
+  color: var(--text2);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.hlog-unit-btn.active { background: var(--accent); color: #fff; }
+
+/* ── My Medications section ───────────────────────────────── */
+.health-meds-section {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.health-meds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.health-meds-empty {
+  font-size: 13px;
+  color: var(--text3);
+  padding: 12px 0;
+}
+.health-med-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.health-med-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.health-med-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.health-med-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.health-med-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.health-med-chip {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+.health-med-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Med form (add / edit inline) ────────────────────────── */
+.med-form {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.med-schedule-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.med-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Per-medication rows in log modal ────────────────────── */
+.hlog-med-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hlog-med-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.hlog-med-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.hlog-med-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.hlog-med-sub {
+  font-size: 11px;
+  color: var(--text3);
+}
+.hlog-med-btns {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.hlog-med-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+}
+.hlog-med-btn.taken:hover  { border-color: #22d3ee; color: #22d3ee; }
+.hlog-med-btn.missed:hover { border-color: #ef4444; color: #ef4444; }
+.hlog-med-btn.taken.active  { background: #22d3ee22; border-color: #22d3ee; color: #22d3ee; }
+.hlog-med-btn.missed.active { background: #ef444422; border-color: #ef4444; color: #ef4444; }
+
+/* ── Small button variant ─────────────────────────────────── */
+.btn-sm { padding: 5px 12px !important; font-size: 12px !important; }
