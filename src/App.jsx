@@ -8,6 +8,7 @@ import Tasks         from './pages/Tasks.jsx'
 import Projects      from './pages/Projects.jsx'
 import ProjectDetail from './pages/ProjectDetail.jsx'
 import FocusSession  from './pages/FocusSession.jsx'
+import Journal       from './pages/Journal.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -186,14 +187,12 @@ function AppShell({ user }) {
             </NavLink>
           )}
 
-          {[
-            { icon: '📓', label: 'Journal' },
-          ].map(item => (
-            <div key={item.label} className="nav-item disabled" title={!showFull ? item.label : undefined}>
-              <span className="nav-icon">{item.icon}</span>
-              {showFull && <><span>{item.label}</span><span className="soon">soon</span></>}
-            </div>
-          ))}
+          <NavLink to="/journal"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Journal' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">📓</span>
+            {showFull && <span>Journal</span>}
+          </NavLink>
         </div>
 
         <div className="sb-action-btns">
@@ -232,6 +231,7 @@ function AppShell({ user }) {
           <Route path="/projects/:id" element={<ProjectDetail userId={user?.id} />} />
           <Route path="/focus"        element={<FocusSession  userId={user?.id} />} />
           <Route path="/health"       element={<Health        userId={user?.id} />} />
+          <Route path="/journal"      element={<Journal       userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />

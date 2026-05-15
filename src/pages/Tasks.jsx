@@ -282,12 +282,79 @@ function KanbanColumn({ status, tasks, categories, onAddTask, onEdit, onToggleDo
   )
 }
 
+// ─── Daily List View ──────────────────────────────────────────
+function DailyListView({ tasks, categories, onToggleDone, onEdit, onAdd }) {
+  const today = new Date(); today.setHours(0,0,0,0)
+
+  const overdue = tasks.filter(t => t.status !== 'done' && isPastDue(t.due_date))
+  const dueToday = tasks.filter(t => {
+    if (t.status === 'done' || !t.due_date) return false
+    const d = new Date(t.due_date + 'T00:00:00')
+    return d.getTime() === today.getTime()
+  })
+  const noDate = tasks.filter(t => t.status !== 'done' && !t.due_date)
+  const done = tasks.filter(t => t.status === 'done' && t.due_date === new Date().toISOString().split('T')[0])
+
+  function DLRow({ task }) {
+    const cat  = categories.find(c => c.id === task.category_id)
+    const done = task.status === 'done'
+    return (
+      <div className="dl-row">
+        <button className={`dl-check${done ? ' done' : ''}`}
+          onClick={() => onToggleDone(task)}>
+          {done && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 3L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        </button>
+        <div className="dl-info" onClick={() => onEdit(task)}>
+          <span className={`dl-title${done ? ' done' : ''}`}>{task.title}</span>
+          {cat && <span className="dl-cat" style={{ color: cat.color, background: cat.color + '18' }}>{cat.name}</span>}
+          {task.due_time && <span className="dl-time">⏰ {task.due_time.slice(0,5)}</span>}
+        </div>
+        {task.priority === 'high' && <span className="dl-pri high">!</span>}
+      </div>
+    )
+  }
+
+  function Section({ label, items, color }) {
+    if (items.length === 0) return null
+    return (
+      <div className="dl-section">
+        <div className="dl-section-label" style={{ color }}>{label} <span className="dl-section-count">{items.length}</span></div>
+        {items.map(t => <DLRow key={t.id} task={t} />)}
+      </div>
+    )
+  }
+
+  const isEmpty = overdue.length + dueToday.length + noDate.length + done.length === 0
+
+  return (
+    <div className="daily-list">
+      {isEmpty ? (
+        <div className="dl-empty">
+          <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)' }}>Nothing due today</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Enjoy the clear schedule — or add something.</div>
+          <button className="btn-primary" style={{ marginTop: 16 }} onClick={onAdd}>+ Add task</button>
+        </div>
+      ) : (
+        <>
+          <Section label="Overdue" items={overdue} color="#ef4444" />
+          <Section label="Due today" items={dueToday} color="var(--accent)" />
+          <Section label="No date" items={noDate} color="var(--text3)" />
+          <Section label="Done today" items={done} color="var(--green, #22c55e)" />
+          <button className="dl-add-btn" onClick={onAdd}>+ Add task</button>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Tasks Page ───────────────────────────────────────────────
 export default function Tasks({ userId }) {
   const [tasks,          setTasks]          = useState([])
   const [categories,     setCategories]     = useState([])
   const [activeProjects, setActiveProjects] = useState([])
   const [loading,        setLoading]        = useState(true)
+  const [taskView,    setTaskView]    = useState('kanban') // 'kanban' | 'daily'
   const [filter,      setFilter]      = useState('all')
   const [showForm,    setShowForm]    = useState(false)
   const [editingTask, setEditingTask] = useState(null)
@@ -429,7 +496,15 @@ export default function Tasks({ userId }) {
               : 'Your master task board.'}
           </p>
         </div>
-        <button className="cal-add-btn" onClick={() => openAdd('todo')}>+ Add task</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="task-view-toggle">
+            <button className={`tvt-btn${taskView === 'kanban' ? ' active' : ''}`}
+              onClick={() => setTaskView('kanban')}>📋 Board</button>
+            <button className={`tvt-btn${taskView === 'daily' ? ' active' : ''}`}
+              onClick={() => setTaskView('daily')}>📅 Daily</button>
+          </div>
+          <button className="cal-add-btn" onClick={() => openAdd('todo')}>+ Add task</button>
+        </div>
       </div>
 
       <div className="cat-bar">
@@ -473,6 +548,14 @@ export default function Tasks({ userId }) {
 
       {loading ? (
         <div style={{ color: 'var(--text3)', fontSize: 14, padding: '3rem 0', textAlign: 'center' }}>Loading…</div>
+      ) : taskView === 'daily' ? (
+        <DailyListView
+          tasks={tasks}
+          categories={categories}
+          onToggleDone={handleToggleDone}
+          onEdit={openEdit}
+          onAdd={() => openAdd('todo')}
+        />
       ) : (
         <div className="kb-board"
           onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragTarget(null) }}>
