@@ -160,3 +160,16 @@
   font-family: inherit;
 }
 .hlog-qual-btn:hover { border-color: var(--accent); color: var(--text); }
+.hlog-toggle-btn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: inherit;
+}
+.hlog-toggle-btn:hover { border-color: var(--accent); color: var(--text); }

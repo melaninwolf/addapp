@@ -29,7 +29,7 @@ const DEFAULTS = {
   color:          '#3b82f6',
   font:           'lexend',
   healthEnabled:  true,
-  healthMetrics:  ['energy', 'sleep', 'stress'],
+  healthMetrics:  ['energy', 'sleep', 'stress', 'workout', 'steps', 'meditation', 'weight', 'bpm', 'bp', 'glucose', 'period', 'medication'],
 }
 
 const KEY = 'addapp-settings'
