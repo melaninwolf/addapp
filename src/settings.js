@@ -39,7 +39,16 @@ const KEY = 'addapp-settings'
 export function getSettings() {
   try {
     const saved = localStorage.getItem(KEY)
-    return saved ? { ...DEFAULTS, ...JSON.parse(saved) } : { ...DEFAULTS }
+    if (!saved) return { ...DEFAULTS }
+    const parsed = JSON.parse(saved)
+    // Merge: any new metrics added to DEFAULTS are automatically added to
+    // existing users' saved list (preserving their order + any they removed
+    // only if it was never in DEFAULTS before — new defaults always show up)
+    if (Array.isArray(parsed.healthMetrics)) {
+      const incoming = DEFAULTS.healthMetrics.filter(m => !parsed.healthMetrics.includes(m))
+      parsed.healthMetrics = [...parsed.healthMetrics, ...incoming]
+    }
+    return { ...DEFAULTS, ...parsed }
   } catch {
     return { ...DEFAULTS }
   }
