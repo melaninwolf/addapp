@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { addMAM, MAM_TASK } from '../xp'
 import './Tasks.css'
 
 // ─── Constants ───────────────────────────────────────────────
@@ -419,6 +420,7 @@ export default function Tasks({ userId }) {
 
   function handleToggleDone(task) {
     const newStatus = task.status === 'done' ? 'todo' : 'done'
+    if (newStatus === 'done') addMAM(MAM_TASK)
     updateTaskField(task.id, { status: newStatus })
   }
 

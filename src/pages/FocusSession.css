@@ -454,3 +454,29 @@
   .focus-types            { gap: 6px; }
   .focus-type-btn         { font-size: 12px; padding: 6px 11px; }
 }
+
+/* ── Hobby dedication ──────────────────────────────────────────────────── */
+.focus-hobby-hint {
+  font-size: 12px;
+  color: var(--accent);
+  margin: 6px 0 0;
+  font-weight: 500;
+}
+
+.focus-hobby-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-glow);
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text);
+  margin-top: 10px;
+  animation: credit-pop 0.35s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@keyframes credit-pop {
+  from { opacity: 0; transform: scale(0.88) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}

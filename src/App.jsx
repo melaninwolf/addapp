@@ -9,6 +9,7 @@ import Projects      from './pages/Projects.jsx'
 import ProjectDetail from './pages/ProjectDetail.jsx'
 import FocusSession  from './pages/FocusSession.jsx'
 import Journal       from './pages/Journal.jsx'
+import Hobbies       from './pages/Hobbies.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -193,6 +194,13 @@ function AppShell({ user }) {
             <span className="nav-icon">📓</span>
             {showFull && <span>Journal</span>}
           </NavLink>
+
+          <NavLink to="/hobbies"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Hobbies' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">🌳</span>
+            {showFull && <span>Hobbies</span>}
+          </NavLink>
         </div>
 
         <div className="sb-action-btns">
@@ -212,7 +220,7 @@ function AppShell({ user }) {
           <div className="xp-block">
             <div className="xp-top">
               <span className="xp-label">LVL {getLevel(xp)}</span>
-              {showFull && <span className="xp-pts">{getXPIntoLevel(xp)} / 100 XP</span>}
+              {showFull && <span className="xp-pts">{getXPIntoLevel(xp)}g / 100g</span>}
             </div>
             <div className="xp-track">
               <div className="xp-fill" style={{ width: getLevelProgress(xp) + '%' }} />
@@ -232,6 +240,7 @@ function AppShell({ user }) {
           <Route path="/focus"        element={<FocusSession  userId={user?.id} />} />
           <Route path="/health"       element={<Health        userId={user?.id} />} />
           <Route path="/journal"      element={<Journal       userId={user?.id} />} />
+          <Route path="/hobbies"     element={<Hobbies       userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />

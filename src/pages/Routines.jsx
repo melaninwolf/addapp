@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { addXP } from '../xp'
+import { addMAM, MAM_ROUTINE, MAM_TRIGGER } from '../xp'
 import { supabase } from '../supabase'
 import EmojiPicker from '../components/EmojiPicker'
 import './Routines.css'
@@ -487,8 +487,8 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       setSkipped(newSkipped)
       setFinished(true)
       playSound('finish')
-      const xpEarned = newDoneCount * (routine.type === 'trigger' ? 3 : 5)
-      addXP(xpEarned)
+      const xpEarned = newDoneCount * (routine.type === 'trigger' ? MAM_TRIGGER : MAM_ROUTINE)
+      addMAM(xpEarned)
       fireNotif(xpEarned)
     } else {
       setStepLog(newLog)
@@ -528,8 +528,8 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       setQueue(newQueue)
       setDeferred(newDeferred)
       setFinished(true)
-      const xpEarnedLater = doneCount * (routine.type === 'trigger' ? 3 : 5)
-      addXP(xpEarnedLater)
+      const xpEarnedLater = doneCount * (routine.type === 'trigger' ? MAM_TRIGGER : MAM_ROUTINE)
+      addMAM(xpEarnedLater)
       fireNotif(xpEarnedLater)
     } else {
       setQueue(newQueue)

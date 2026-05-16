@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
+import { addMAM, MAM_FOCUS } from '../xp'
 import './FocusSession.css'
 
 const SESSION_TYPES = [
@@ -46,6 +47,9 @@ export default function FocusSession({ userId }) {
   const [sessionType, setSessionType] = useState('deep_work')
   const [projectId, setProjectId]     = useState('')
   const [projects, setProjects]       = useState([])
+  const [hobbyId,  setHobbyId]        = useState('')
+  const [hobbies,  setHobbies]        = useState([])
+  const [hobbyCredited, setHobbyCredited] = useState(null) // { name, minutes } shown on done screen
 
   // ── Session record ──
   const [notes, setNotes]           = useState('')
@@ -59,7 +63,7 @@ export default function FocusSession({ userId }) {
   const hiddenAtRef = useRef(null)   // Page Visibility: when tab was hidden
   const runningRef  = useRef(false)  // always-current mirror of running state
 
-  // ── Load active projects ──
+  // ── Load active projects + hobbies ──
   useEffect(() => {
     if (!userId) return
     supabase
@@ -69,6 +73,12 @@ export default function FocusSession({ userId }) {
       .in('status', ['not_started', 'active', 'hold'])
       .order('name')
       .then(({ data }) => setProjects(data || []))
+    supabase
+      .from('hobbies')
+      .select('id, name, tree_type')
+      .eq('user_id', userId)
+      .order('name')
+      .then(({ data }) => setHobbies(data || []))
   }, [userId])
 
   // Keep runningRef in sync so visibility handler always sees current value
@@ -140,6 +150,8 @@ export default function FocusSession({ userId }) {
   // ── Supabase: save session on completion ──
   async function doSaveSession() {
     if (!userId) return
+    const completedAt = new Date().toISOString()
+
     const { data } = await supabase
       .from('focus_sessions')
       .insert({
@@ -148,12 +160,37 @@ export default function FocusSession({ userId }) {
         session_type:     sessionType,
         duration_minutes: FOCUS_MINS,
         started_at:       sessionStart,
-        completed_at:     new Date().toISOString(),
+        completed_at:     completedAt,
         session_number:   (completedCount % SET_SIZE) + 1,
       })
       .select('id')
       .single()
     if (data) setSessionId(data.id)
+
+    // Credit minutes to hobby if one was selected
+    if (hobbyId) {
+      const hobby = hobbies.find(h => h.id === hobbyId)
+      if (hobby) {
+        // Insert session log
+        await supabase.from('hobby_sessions').insert({
+          hobby_id:         hobbyId,
+          user_id:          userId,
+          session_date:     completedAt.split('T')[0],
+          duration_minutes: FOCUS_MINS,
+          notes:            `Focus session — ${SESSION_TYPES.find(t => t.value === sessionType)?.label || sessionType}`,
+        })
+        // Update hobby totals
+        await supabase.from('hobbies').update({
+          total_minutes:   (hobby.total_minutes || 0) + FOCUS_MINS,
+          last_session_at: completedAt,
+        }).eq('id', hobbyId)
+        setHobbyCredited({ name: hobby.name, minutes: FOCUS_MINS })
+      }
+    }
+
+    // Award MAM grams for completing the session
+    addMAM(MAM_FOCUS)
+
     // Let project detail page know to refresh its counter
     window.dispatchEvent(new CustomEvent('focus-session-saved', { detail: { projectId } }))
   }
@@ -172,6 +209,7 @@ export default function FocusSession({ userId }) {
     setNotes('')
     setSessionId(null)
     setConfirmStop(false)
+    setHobbyCredited(null)
     setRunning(true)
   }
 
@@ -278,6 +316,31 @@ export default function FocusSession({ userId }) {
             </div>
           )}
 
+          {/* Hobby dedication */}
+          {hobbies.length > 0 && (
+            <div className="focus-field">
+              <label className="focus-section-label">
+                Dedicate to a hobby
+                <span className="focus-optional"> — optional</span>
+              </label>
+              <select
+                className="focus-select"
+                value={hobbyId}
+                onChange={e => setHobbyId(e.target.value)}
+              >
+                <option value="">— No hobby —</option>
+                {hobbies.map(h => (
+                  <option key={h.id} value={h.id}>🌳 {h.name}</option>
+                ))}
+              </select>
+              {hobbyId && (
+                <p className="focus-hobby-hint">
+                  {FOCUS_MINS} min will grow your {hobbies.find(h => h.id === hobbyId)?.name} tree 🌱
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Break hint */}
           <p className="focus-break-hint">
             Next break: <strong>{nextBreakMins} min</strong>
@@ -369,6 +432,12 @@ export default function FocusSession({ userId }) {
             {typeInfo.emoji} {typeInfo.label}
             {projectInfo && <> · 📁 {projectInfo.name}</>}
           </p>
+
+          {hobbyCredited && (
+            <div className="focus-hobby-credit">
+              🌳 <strong>+{hobbyCredited.minutes} min</strong> added to <em>{hobbyCredited.name}</em>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="focus-field">

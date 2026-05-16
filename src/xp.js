@@ -3,6 +3,14 @@ import { supabase } from './supabase'
 const XP_KEY = 'addapp-xp'
 const XP_PER_LEVEL = 100
 
+// ── MAM gram reward constants ──────────────────────────────
+export const MAM_TASK          = 10   // any task completed
+export const MAM_FOCUS         = 5    // per 25-min focus session
+export const MAM_ROUTINE       = 5    // per routine step (regular)
+export const MAM_TRIGGER       = 3    // per routine step (trigger)
+export const MAM_HOBBY_PER_HR  = 10   // per 60 min of hobby time
+export const MAM_WATER         = 3    // daily water goal met
+
 export function getXP() {
   return parseInt(localStorage.getItem(XP_KEY) || '0', 10)
 }
@@ -24,6 +32,9 @@ export function addXP(amount) {
 
   return next
 }
+
+// Alias — use addMAM going forward
+export const addMAM = addXP
 
 // Call on login to sync Supabase XP → localStorage
 export async function syncXPFromDb() {

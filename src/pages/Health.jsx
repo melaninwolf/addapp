@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { getSettings } from '../settings'
+import { addMAM, MAM_WATER } from '../xp'
 import './Health.css'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -523,6 +524,127 @@ function LogModal({ open, onClose, onSave, existing, existingMedLogs, enabledMet
   )
 }
 
+// ── Water Tracker ─────────────────────────────────────────────
+function WaterTracker({ userId }) {
+  const [glasses,     setGlasses]     = useState(0)
+  const [goal,        setGoal]        = useState(8)
+  const [goalMet,     setGoalMet]     = useState(false)
+  const [editGoal,    setEditGoal]    = useState(false)
+  const [goalInput,   setGoalInput]   = useState('8')
+  const [saving,      setSaving]      = useState(false)
+  const [celebrating, setCelebrating] = useState(false)
+  const today = todayStr()
+
+  useEffect(() => { if (userId) loadWater() }, [userId]) // eslint-disable-line
+
+  async function loadWater() {
+    const { data } = await supabase
+      .from('water_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('log_date', today)
+      .maybeSingle()
+    if (data) {
+      setGlasses(data.glasses_drunk)
+      setGoal(data.goal)
+      setGoalInput(String(data.goal))
+      setGoalMet(data.goal_met)
+    }
+  }
+
+  async function updateWater(newGlasses, newGoal) {
+    if (!userId || saving) return
+    setSaving(true)
+    const g          = newGoal ?? goal
+    const wasGoalMet = goalMet
+    const isGoalMet  = newGlasses >= g
+
+    await supabase.from('water_logs').upsert(
+      { user_id: userId, log_date: today, glasses_drunk: newGlasses,
+        goal: g, goal_met: isGoalMet, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,log_date' }
+    )
+
+    setGlasses(newGlasses)
+    setGoalMet(isGoalMet)
+
+    if (isGoalMet && !wasGoalMet) {
+      addMAM(MAM_WATER)
+      setCelebrating(true)
+      setTimeout(() => setCelebrating(false), 2200)
+    }
+
+    setSaving(false)
+  }
+
+  async function applyGoal() {
+    const g = Math.max(1, Math.min(30, parseInt(goalInput) || 8))
+    setGoal(g)
+    setGoalInput(String(g))
+    setEditGoal(false)
+    await updateWater(glasses, g)
+  }
+
+  const pct = goal > 0 ? Math.min((glasses / goal) * 100, 100) : 0
+
+  return (
+    <div className={`water-tracker${celebrating ? ' water-celebrating' : ''}`}>
+      <div className="water-header">
+        <span className="water-title">💧 Water</span>
+        {editGoal ? (
+          <div className="water-goal-edit">
+            <input
+              type="number" min="1" max="30"
+              className="modal-input hlog-num-sm"
+              value={goalInput}
+              onChange={e => setGoalInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && applyGoal()}
+              autoFocus
+            />
+            <span className="water-goal-unit">glasses / day</span>
+            <button className="btn-ghost btn-sm" onClick={applyGoal}>Set</button>
+          </div>
+        ) : (
+          <button className="water-goal-btn" onClick={() => setEditGoal(true)}>
+            Goal: {goal} glasses ✏️
+          </button>
+        )}
+      </div>
+
+      <div className="water-body">
+        <button
+          className="water-minus"
+          onClick={() => glasses > 0 && updateWater(glasses - 1)}
+          disabled={glasses === 0 || saving}
+          aria-label="Remove glass"
+        >−</button>
+
+        <div className="water-center">
+          <div className="water-count">
+            <span className="water-num">{glasses}</span>
+            <span className="water-denom">/ {goal}</span>
+          </div>
+          <div className="water-bar-track">
+            <div className="water-bar-fill" style={{ width: `${pct}%` }} />
+          </div>
+          {goalMet && (
+            <span className="water-done">
+              {celebrating ? '🎉 Goal met! +3g' : '✓ Done for today +3g'}
+            </span>
+          )}
+        </div>
+
+        <button
+          className="water-plus"
+          onClick={() => updateWater(glasses + 1)}
+          disabled={saving}
+          aria-label="Add glass"
+        >+</button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────
 export default function Health({ userId }) {
   const settings       = getSettings()
@@ -638,6 +760,9 @@ export default function Health({ userId }) {
           {todayLog ? 'Update today' : '+ Log today'}
         </button>
       </div>
+
+      {/* Water tracker */}
+      <WaterTracker userId={userId} />
 
       {/* Dashboard cards */}
       <div className="health-cards">
