@@ -92,3 +92,178 @@
 .hqc-emoji { font-size: 18px; flex-shrink: 0; }
 .hqc-label { flex: 1; font-size: 14px; font-weight: 600; }
 .hqc-arrow { color: var(--text3); font-size: 14px; }
+
+/* ── Mission Card ─────────────────────────────────────────── */
+.mission-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mission-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mission-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.mission-lvl {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: var(--mono);
+  letter-spacing: 0.05em;
+}
+
+/* Destination row */
+.mission-dest-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mission-dest-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.mission-dest-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mission-dest-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text1);
+  letter-spacing: -0.3px;
+}
+.mission-dest-next {
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mission-au {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.mission-au-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text1);
+  font-family: var(--mono);
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.mission-au-unit {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+
+/* Destination progress */
+.mission-dest-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mission-dest-bar-track {
+  flex: 1;
+  height: 5px;
+  background: var(--bg3);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.mission-dest-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #06b6d4);
+  border-radius: 99px;
+  transition: width 0.7s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.mission-dest-bar-pct {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+  min-width: 28px;
+  text-align: right;
+}
+
+/* Fuel section */
+.mission-fuel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.mission-fuel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+}
+.mission-fuel-note {
+  font-weight: 400;
+  color: var(--text3);
+  font-size: 11px;
+}
+.mission-fuel-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mission-fuel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mission-fuel-icon { font-size: 13px; flex-shrink: 0; }
+.mission-fuel-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg3);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.mission-fuel-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.55s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.mfill-matter { background: #06b6d4; }
+.mfill-anti   { background: #a78bfa; }
+.mission-fuel-val {
+  font-size: 11px;
+  color: var(--text3);
+  font-family: var(--mono);
+  min-width: 64px;
+  text-align: right;
+}
+.mission-fuel-totals {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+
+@media (max-width: 480px) {
+  .mission-dest-name { font-size: 15px; }
+  .mission-au-val    { font-size: 16px; }
+  .mission-fuel-totals { flex-direction: column; gap: 4px; }
+}

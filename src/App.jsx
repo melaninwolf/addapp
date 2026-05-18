@@ -1,5 +1,5 @@
+import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
 import Home     from './pages/Home.jsx'
 import Health   from './pages/Health.jsx'
 import Routines from './pages/Routines.jsx'
@@ -79,12 +79,56 @@ function AccountPage({ user, onSignOut, onBack }) {
   )
 }
 
+// ── Level-up Toast ────────────────────────────────────────────
+function LevelUpToast({ toast, onDone }) {
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(onDone, 3800)
+    return () => clearTimeout(t)
+  }, [toast, onDone])
+
+  if (!toast) return null
+
+  const isDestination = !!toast.newDest
+  const isMatter      = toast.level % 2 === 1   // odd = matter
+
+  return (
+    <div className={`levelup-toast${isDestination ? ' levelup-dest' : ''}`}>
+      <div className="levelup-inner">
+        {isDestination ? (
+          <>
+            <div className="levelup-dest-icon">{toast.newDest.emoji}</div>
+            <div className="levelup-dest-name">{toast.newDest.name}</div>
+            <div className="levelup-dest-sub">New destination reached!</div>
+            <div className="levelup-fuel">
+              {isMatter ? '⚛️' : '⚡'} +1g {isMatter ? 'Matter' : 'Antimatter'} · LVL {toast.level}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="levelup-lvl">LVL {toast.level}</div>
+            <div className="levelup-fuel">
+              {isMatter ? '⚛️ +1g Matter' : '⚡ +1g Antimatter'}
+            </div>
+            <div className="levelup-sub">
+              {isMatter ? `${getMatterProgress(toast.xp).toFixed(1)} / 2.5g` : `${getAntimatterProgress(toast.xp).toFixed(1)} / 2.5g`}
+              {' '}toward next burst
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AppShell({ user }) {
   const [collapsed, setCollapsed]   = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isMobile, setIsMobile]     = useState(() => window.innerWidth <= 768)
   const [settings,  setSettings]    = useState(() => getSettings())
   const [xp,        setXp]          = useState(() => getXP())
+  const [toast,     setToast]       = useState(null)
+  const prevXpRef                   = React.useRef(getXP())
   const navigate = useNavigate()
 
   useEffect(() => { initSettings() }, [])
@@ -96,7 +140,25 @@ function AppShell({ user }) {
   }, [])
 
   useEffect(() => {
-    const handler = () => setXp(getXP())
+    const handler = () => {
+      const newXp  = getXP()
+      const oldXp  = prevXpRef.current
+      const oldLvl = getLevel(oldXp)
+      const newLvl = getLevel(newXp)
+
+      if (newLvl > oldLvl) {
+        const oldDest = getCurrentDestination(oldXp)
+        const newDest = getCurrentDestination(newXp)
+        setToast({
+          level:   newLvl,
+          xp:      newXp,
+          newDest: newDest.au > oldDest.au ? newDest : null,
+        })
+      }
+
+      prevXpRef.current = newXp
+      setXp(newXp)
+    }
     window.addEventListener('xp-update', handler)
     return () => window.removeEventListener('xp-update', handler)
   }, [])
@@ -122,16 +184,18 @@ function AppShell({ user }) {
   return (
     <div className={`layout${collapsed ? ' sb-collapsed' : ''}${drawerOpen ? ' sb-open' : ''}`}>
 
+      <LevelUpToast toast={toast} onDone={() => setToast(null)} />
+
       <div className="mobile-header">
         <button className="hamburger-btn" onClick={() => setDrawerOpen(d => !d)} aria-label="Open menu">☰</button>
-        <div className="logo">add<span>app</span></div>
+        <div className="logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>add<span>app</span></div>
       </div>
 
       {drawerOpen && <div className="drawer-backdrop" onClick={closeDrawer} />}
 
       <nav className="sidebar">
         <div className="sb-head">
-          {showFull && <div className="logo">add<span>app</span></div>}
+          {showFull && <div className="logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>add<span>app</span></div>}
           <button className="sb-toggle" onClick={() => setCollapsed(c => !c)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
             {collapsed ? '▶' : '◀'}
