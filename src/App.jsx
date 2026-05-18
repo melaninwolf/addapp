@@ -13,7 +13,9 @@ import Hobbies       from './pages/Hobbies.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
-import { getXP, getLevel, getLevelProgress, getXPIntoLevel } from './xp'
+import { getXP, getLevel, getXPIntoLevel,
+         getMatter, getAntimatter, getMatterProgress, getAntimatterProgress,
+         getAUTraveled, getCurrentDestination, getNextDestination } from './xp'
 import { supabase } from './supabase'
 import { syncXPFromDb } from './xp'
 import './App.css'
@@ -217,14 +219,57 @@ function AppShell({ user }) {
         </div>
 
         <div className="sidebar-footer">
-          <div className="xp-block">
-            <div className="xp-top">
-              <span className="xp-label">LVL {getLevel(xp)}</span>
-              {showFull && <span className="xp-pts">{getXPIntoLevel(xp)}g / 100g</span>}
+          <div className="mam-block">
+
+            {/* Level + gram progress */}
+            <div className="mam-level-row">
+              <span className="mam-lvl">LVL {getLevel(xp)}</span>
+              {showFull && <span className="mam-grams">{getXPIntoLevel(xp)}g / 100g</span>}
             </div>
-            <div className="xp-track">
-              <div className="xp-fill" style={{ width: getLevelProgress(xp) + '%' }} />
+
+            {/* Current destination */}
+            {showFull && (() => {
+              const dest = getCurrentDestination(xp)
+              const next = getNextDestination(xp)
+              return (
+                <div className="mam-destination">
+                  <span>{dest.emoji} {dest.name}</span>
+                  {next && <span className="mam-next">→ {next.emoji} {next.name}</span>}
+                </div>
+              )
+            })()}
+
+            {/* Matter bar */}
+            <div className="mam-bar-row">
+              <span className="mam-bar-icon">⚛️</span>
+              <div className="mam-bar-track">
+                <div className="mam-bar-fill mam-matter"
+                  style={{ width: `${(getMatterProgress(xp) / 2.5) * 100}%` }} />
+              </div>
+              {showFull && (
+                <span className="mam-bar-val">{getMatterProgress(xp).toFixed(1)}</span>
+              )}
             </div>
+
+            {/* Antimatter bar */}
+            <div className="mam-bar-row">
+              <span className="mam-bar-icon">⚡</span>
+              <div className="mam-bar-track">
+                <div className="mam-bar-fill mam-anti"
+                  style={{ width: `${(getAntimatterProgress(xp) / 2.5) * 100}%` }} />
+              </div>
+              {showFull && (
+                <span className="mam-bar-val">{getAntimatterProgress(xp).toFixed(1)}</span>
+              )}
+            </div>
+
+            {/* AU traveled */}
+            {showFull && (
+              <div className="mam-au">
+                🚀 {getAUTraveled(xp).toFixed(2)} AU traveled
+              </div>
+            )}
+
           </div>
         </div>
       </nav>

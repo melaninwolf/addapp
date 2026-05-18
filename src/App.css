@@ -161,14 +161,93 @@
   flex-shrink: 0;
 }
 
-/* ── XP bar ── */
+/* ── MAM sidebar block ── */
 
-.xp-block { padding: 0 0.25rem; }
-.xp-top { display: flex; justify-content: space-between; margin-bottom: 6px; }
-.xp-label { font-family: var(--mono); font-size: 11px; color: var(--accent); font-weight: 500; }
-.xp-pts   { font-family: var(--mono); font-size: 11px; color: var(--text3); }
-.xp-track { height: 4px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
-.xp-fill  { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.6s ease; }
+.mam-block {
+  padding: 0 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* Level row */
+.mam-level-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.mam-lvl {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.mam-grams {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+
+/* Destination */
+.mam-destination {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mam-destination > span:first-child {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text1);
+}
+.mam-next {
+  font-size: 10px;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fuel bars */
+.mam-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.mam-bar-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.mam-bar-track {
+  flex: 1;
+  height: 4px;
+  background: var(--bg3);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.mam-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.55s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.mam-matter { background: #06b6d4; }
+.mam-anti   { background: #a78bfa; }
+.mam-bar-val {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  min-width: 22px;
+  text-align: right;
+}
+
+/* AU traveled */
+.mam-au {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 1px;
+}
 
 
 /* ─── MAIN ───────────────────────────────────────────────────────────────── */

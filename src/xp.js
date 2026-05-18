@@ -62,3 +62,75 @@ export function getLevelProgress(xp = getXP()) {
 export function getXPIntoLevel(xp = getXP()) {
   return xp % XP_PER_LEVEL
 }
+
+// ── MAM Space Conversion System ───────────────────────────────
+
+// Real astronomical destinations with AU distances
+export const DESTINATIONS = [
+  { name: 'Launch Pad',       emoji: '🌍', au: 0       },
+  { name: 'Moon orbit',       emoji: '🌕', au: 0.0026  },
+  { name: 'Venus flyby',      emoji: '🌟', au: 0.28    },
+  { name: 'Mars orbit',       emoji: '🔴', au: 0.52    },
+  { name: 'Asteroid Belt',    emoji: '🪨', au: 2.2     },
+  { name: 'Jupiter orbit',    emoji: '🟠', au: 4.2     },
+  { name: 'Saturn orbit',     emoji: '💫', au: 8.5     },
+  { name: 'Uranus orbit',     emoji: '🔵', au: 18.2    },
+  { name: 'Neptune orbit',    emoji: '🌀', au: 29.1    },
+  { name: 'Kuiper Belt',      emoji: '❄️', au: 39.5    },
+  { name: 'Oort Cloud',       emoji: '☁️', au: 2000    },
+  { name: 'Proxima Centauri', emoji: '⭐', au: 268770  },
+]
+
+const AU_PER_BURST = 2.5  // grams of each fuel type needed per 1 AU (tier 0)
+
+// Odd-numbered levels completed → matter (g)
+export function getMatter(xp = getXP()) {
+  const completed = Math.floor((xp || 0) / XP_PER_LEVEL)
+  return Math.ceil(completed / 2)
+}
+
+// Even-numbered levels completed → antimatter (g)
+export function getAntimatter(xp = getXP()) {
+  const completed = Math.floor((xp || 0) / XP_PER_LEVEL)
+  return Math.floor(completed / 2)
+}
+
+// Efficiency doubles every 50 levels: 2^tier where tier = floor((level-1)/50)
+export function getEfficiency(xp = getXP()) {
+  const tier = Math.floor((getLevel(xp) - 1) / 50)
+  return Math.pow(2, tier)
+}
+
+// Matter grams toward the next 2.5g launch threshold (0 → 2.5, repeating)
+export function getMatterProgress(xp = getXP()) {
+  return getMatter(xp) % AU_PER_BURST
+}
+
+// Antimatter grams toward the next 2.5g launch threshold
+export function getAntimatterProgress(xp = getXP()) {
+  return getAntimatter(xp) % AU_PER_BURST
+}
+
+// Total AU traveled (each completed 2.5g pair × efficiency at time of burst)
+// Simplified: uses current efficiency for display
+export function getAUTraveled(xp = getXP()) {
+  const bursts = Math.floor(Math.min(getMatter(xp), getAntimatter(xp)) / AU_PER_BURST)
+  return +(bursts * getEfficiency(xp)).toFixed(4)
+}
+
+// Destination you're currently at
+export function getCurrentDestination(xp = getXP()) {
+  const au = getAUTraveled(xp)
+  let dest = DESTINATIONS[0]
+  for (const d of DESTINATIONS) {
+    if (au >= d.au) dest = d
+    else break
+  }
+  return dest
+}
+
+// Next destination to reach
+export function getNextDestination(xp = getXP()) {
+  const au = getAUTraveled(xp)
+  return DESTINATIONS.find(d => d.au > au) || null
+}
