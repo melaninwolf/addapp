@@ -242,7 +242,7 @@ function MonthCalendar({ selectedDate, onSelectDate, loggedDates }) {
 
   function selectDay(d) {
     const ds = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    if (ds <= today) onSelectDate(ds)
+    onSelectDate(ds)
   }
 
   const yearOpts = Array.from({ length: 10 }, (_, i) => today.split('-')[0] * 1 - 4 + i)
@@ -307,12 +307,10 @@ function MonthCalendar({ selectedDate, onSelectDate, loggedDates }) {
           const isToday = ds === today
           const isSel   = ds === selectedDate
           const isLog   = loggedDates.has(ds)
-          const isFuture = ds > today
           return (
             <button key={ds}
-              className={`cal-cell${isToday ? ' cal-today' : ''}${isSel ? ' cal-selected' : ''}${isFuture ? ' cal-future' : ''}${isLog ? ' cal-logged' : ''}`}
-              onClick={() => selectDay(d)}
-              disabled={isFuture}>
+              className={`cal-cell${isToday ? ' cal-today' : ''}${isSel ? ' cal-selected' : ''}${isLog ? ' cal-logged' : ''}`}
+              onClick={() => selectDay(d)}>
               <span className="cal-day-num">{d}</span>
               {isLog && <span className="cal-dot" />}
             </button>
