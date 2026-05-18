@@ -136,6 +136,48 @@ function DrawCanvas({ data, onChange, height = 80 }) {
   )
 }
 
+// ── BulletList ────────────────────────────────────────────────
+function BulletList({ items, onChange, placeholder = 'Add item…', numbered = false }) {
+  const inputRefs = useRef([])
+
+  function update(i, val) {
+    const n = [...items]; n[i] = val; onChange(n)
+  }
+  function addAfter(i) {
+    const n = [...items]; n.splice(i + 1, 0, ''); onChange(n)
+    setTimeout(() => inputRefs.current[i + 1]?.focus(), 0)
+  }
+  function remove(i) {
+    if (items.length === 1) { onChange(['']); return }
+    const n = items.filter((_, idx) => idx !== i); onChange(n)
+    setTimeout(() => inputRefs.current[Math.min(i, n.length - 1)]?.focus(), 0)
+  }
+  function onKeyDown(e, i) {
+    if (e.key === 'Enter')     { e.preventDefault(); addAfter(i) }
+    if (e.key === 'Backspace' && items[i] === '' && items.length > 1) { e.preventDefault(); remove(i) }
+  }
+
+  return (
+    <div className="bullet-list">
+      {items.map((item, i) => (
+        <div key={i} className="bullet-row">
+          <span className="bullet-marker">{numbered ? `${i + 1}` : '·'}</span>
+          <input
+            ref={el => inputRefs.current[i] = el}
+            className="journal-input bullet-input"
+            placeholder={placeholder}
+            value={item}
+            onChange={e => update(i, e.target.value)}
+            onKeyDown={e => onKeyDown(e, i)}
+          />
+          <button className="bullet-remove" onClick={() => remove(i)} tabIndex={-1} aria-label="Remove">×</button>
+        </div>
+      ))}
+      <button className="bullet-add" onClick={() => addAfter(items.length - 1)}>+ Add</button>
+    </div>
+  )
+}
+
 // ── PenField ──────────────────────────────────────────────────
 function PenField({ value, onChange, penData, onPenChange, placeholder, rows = 2, canvasHeight = 80 }) {
   const [penMode, setPenMode] = useState(false)
@@ -298,7 +340,7 @@ function MonthCalendar({ selectedDate, onSelectDate, loggedDates }) {
 }
 
 // ── Daily entry panel ─────────────────────────────────────────
-function DailyEntry({ date, userId, healthLog }) {
+function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
   const [entry,      setEntry]      = useState(null)
   const [tasks,      setTasks]      = useState([])
   const [weather,    setWeather]    = useState(null)
@@ -319,6 +361,9 @@ function DailyEntry({ date, userId, healthLog }) {
   const [refPen,      setRefPen]      = useState({})
 
   const isToday = date === todayStr()
+  const [_y, _m, _d] = date.split('-').map(Number)
+  const isFirstOfMonth = _d === 1
+  const isLastOfMonth  = _d === daysInMonth(_y, _m - 1)
 
   useEffect(() => { loadEntry() }, [date, userId]) // eslint-disable-line
 
@@ -334,8 +379,8 @@ function DailyEntry({ date, userId, healthLog }) {
     if (e) {
       setSchedule(e.schedule || {})
       setSchedulePen((e.pen_data || {}).schedule || {})
-      setPriorities(Array.isArray(e.priorities) && e.priorities.length === 4 ? e.priorities : ['', '', '', ''])
-      setPriPen((e.pen_data || {}).priorities || [null, null, null, null])
+      setPriorities(Array.isArray(e.priorities) && e.priorities.length > 0 ? e.priorities : ['', '', '', ''])
+      setPriPen((e.pen_data || {}).priorities || Array(Math.max((e.priorities?.length || 4), 4)).fill(null))
       setMood(e.mood ?? null)
       setGratitude(e.gratitude || ''); setProudOf(e.proud_of || '')
       setAffirmation(e.affirmation || ''); setExcited(e.excited_about || '')
@@ -409,6 +454,18 @@ function DailyEntry({ date, userId, healthLog }) {
             {weather   && <span className="journal-chip">{weather.condition} {weather.temp}°C</span>}
             {healthLog?.energy_score && <span className="journal-chip">⚡ {healthLog.energy_score}</span>}
             {healthLog?.sleep_hours  && <span className="journal-chip">😴 {healthLog.sleep_hours}h</span>}
+            {isFirstOfMonth && onOpenMonthly && (
+              <button className="journal-monthly-btn"
+                onClick={() => onOpenMonthly(date.slice(0, 7), 'review')}>
+                📋 Monthly Review
+              </button>
+            )}
+            {isLastOfMonth && onOpenMonthly && (
+              <button className="journal-monthly-btn"
+                onClick={() => onOpenMonthly(date.slice(0, 7), 'glance')}>
+                📊 Month at a Glance
+              </button>
+            )}
           </div>
         </div>
         <button className="btn-primary entry-save-btn" onClick={save} disabled={saving}>
@@ -455,8 +512,18 @@ function DailyEntry({ date, userId, healthLog }) {
                     penData={priPen[i]}
                     onPenChange={v => setPriPen(prev => { const n = [...prev]; n[i] = v; return n })}
                     placeholder={`Priority ${i + 1}…`} rows={1} canvasHeight={44} />
+                  {priorities.length > 1 && (
+                    <button className="bullet-remove" onClick={() => {
+                      setPriorities(prev => prev.filter((_,idx) => idx !== i))
+                      setPriPen(prev => prev.filter((_,idx) => idx !== i))
+                    }} tabIndex={-1}>×</button>
+                  )}
                 </div>
               ))}
+              <button className="bullet-add" onClick={() => {
+                setPriorities(prev => [...prev, ''])
+                setPriPen(prev => [...prev, null])
+              }}>+ Add priority</button>
               <div className="journal-subsection">
                 <div className="journal-col-title">Mood</div>
                 <div className="mood-row">
@@ -517,13 +584,24 @@ function DailyEntry({ date, userId, healthLog }) {
 }
 
 // ── Weekly view ───────────────────────────────────────────────
+function parseLines(val) {
+  if (!val) return ['']
+  if (Array.isArray(val)) return val.length ? val : ['']
+  const items = val.split('\n').filter(Boolean)
+  return items.length ? items : ['']
+}
+
 function WeeklyView({ weekStart, userId }) {
-  const [entry,     setEntry]     = useState(null)
-  const [stats,     setStats]     = useState(null)
-  const [saving,    setSaving]    = useState(false)
-  const [fields,    setFields]    = useState({ going_well:'', not_working:'', improve_on:'', next_focus:'', lessons:'' })
-  const [gratitude, setGratitude] = useState(['','','','',''])
-  const [highlights,setHighlights]= useState(['','','','','','',''])
+  const [entry,      setEntry]      = useState(null)
+  const [stats,      setStats]      = useState(null)
+  const [saving,     setSaving]     = useState(false)
+  const [goingWell,  setGoingWell]  = useState([''])
+  const [notWorking, setNotWorking] = useState([''])
+  const [improveOn,  setImproveOn]  = useState([''])
+  const [nextFocus,  setNextFocus]  = useState([''])
+  const [lessons,    setLessons]    = useState([''])
+  const [gratitude,  setGratitude]  = useState([''])
+  const [highlights, setHighlights] = useState([''])
 
   useEffect(() => { loadWeek() }, [weekStart, userId]) // eslint-disable-line
 
@@ -538,9 +616,16 @@ function WeeklyView({ weekStart, userId }) {
     const e = weekRes.data
     setEntry(e || null)
     if (e) {
-      setFields({ going_well: e.going_well||'', not_working: e.not_working||'', improve_on: e.improve_on||'', next_focus: e.next_focus||'', lessons: e.lessons||'' })
-      setGratitude(e.gratitude?.length  ? [...e.gratitude,  ...Array(5).fill('')].slice(0,5) : ['','','','',''])
-      setHighlights(e.highlights?.length ? [...e.highlights, ...Array(7).fill('')].slice(0,7) : ['','','','','','',''])
+      setGoingWell(parseLines(e.going_well))
+      setNotWorking(parseLines(e.not_working))
+      setImproveOn(parseLines(e.improve_on))
+      setNextFocus(parseLines(e.next_focus))
+      setLessons(parseLines(e.lessons))
+      setGratitude(parseLines(e.gratitude))
+      setHighlights(parseLines(e.highlights))
+    } else {
+      setGoingWell(['']); setNotWorking(['']); setImproveOn([''])
+      setNextFocus(['']); setLessons(['']); setGratitude(['']); setHighlights([''])
     }
     const tAll = tasksRes.data || [], hAll = healthRes.data || []
     const eArr = hAll.filter(l => l.energy_score), sArr = hAll.filter(l => l.sleep_hours)
@@ -555,7 +640,17 @@ function WeeklyView({ weekStart, userId }) {
   async function save() {
     if (!userId || saving) return
     setSaving(true)
-    const payload = { user_id: userId, week_start: weekStart, ...fields, gratitude: gratitude.filter(Boolean), highlights: highlights.filter(Boolean), updated_at: new Date().toISOString() }
+    const payload = {
+      user_id: userId, week_start: weekStart,
+      going_well:  goingWell.filter(Boolean).join('\n'),
+      not_working: notWorking.filter(Boolean).join('\n'),
+      improve_on:  improveOn.filter(Boolean).join('\n'),
+      next_focus:  nextFocus.filter(Boolean).join('\n'),
+      lessons:     lessons.filter(Boolean).join('\n'),
+      gratitude:   gratitude.filter(Boolean),
+      highlights:  highlights.filter(Boolean),
+      updated_at:  new Date().toISOString(),
+    }
     if (entry) {
       const { data } = await supabase.from('journal_weeks').update(payload).eq('id', entry.id).select().single()
       if (data) setEntry(data)
@@ -565,6 +660,14 @@ function WeeklyView({ weekStart, userId }) {
     }
     setSaving(false)
   }
+
+  const reflectionFields = [
+    { label: '✅ What\'s going well?',  items: goingWell,  set: setGoingWell  },
+    { label: '⚠️ What\'s not working?', items: notWorking, set: setNotWorking },
+    { label: '📈 What to improve on',   items: improveOn,  set: setImproveOn  },
+    { label: '🎯 Next week focus',      items: nextFocus,  set: setNextFocus  },
+    { label: '📚 Lessons learned',      items: lessons,    set: setLessons    },
+  ]
 
   return (
     <div className="journal-weekly">
@@ -581,21 +684,21 @@ function WeeklyView({ weekStart, userId }) {
         </div>
       )}
       <div className="weekly-grid">
-        {[{key:'going_well',label:'✅ What\'s going well?'},{key:'not_working',label:'⚠️ What\'s not working?'},{key:'improve_on',label:'📈 What to improve on'},{key:'next_focus',label:'🎯 Next week focus'},{key:'lessons',label:'📚 Lessons learned'}].map(f => (
-          <div key={f.key} className="weekly-field">
-            <div className="journal-col-title" style={{fontSize:11,marginBottom:6}}>{f.label}</div>
-            <textarea className="journal-input" rows={3} placeholder="Write here…" value={fields[f.key]} onChange={e=>setFields(p=>({...p,[f.key]:e.target.value}))} />
+        {reflectionFields.map(f => (
+          <div key={f.label} className="weekly-field">
+            <div className="journal-col-title" style={{ fontSize: 11, marginBottom: 6 }}>{f.label}</div>
+            <BulletList items={f.items} onChange={f.set} placeholder="Write here…" />
           </div>
         ))}
       </div>
       <div className="weekly-lists">
         <div className="weekly-list-col">
-          <div className="journal-col-title" style={{marginBottom:10}}>🙏 Grateful for</div>
-          {gratitude.map((g,i)=><div key={i} className="wlist-row"><span className="wlist-num">{i+1}</span><input className="journal-input" placeholder={`Item ${i+1}…`} value={g} onChange={e=>setGratitude(p=>{const n=[...p];n[i]=e.target.value;return n})}/></div>)}
+          <div className="journal-col-title" style={{ marginBottom: 10 }}>🙏 Grateful for</div>
+          <BulletList items={gratitude} onChange={setGratitude} placeholder="I'm grateful for…" numbered />
         </div>
         <div className="weekly-list-col">
-          <div className="journal-col-title" style={{marginBottom:10}}>⭐ Highlights</div>
-          {highlights.map((h,i)=><div key={i} className="wlist-row"><span className="wlist-num">{i+1}</span><input className="journal-input" placeholder={`Highlight ${i+1}…`} value={h} onChange={e=>setHighlights(p=>{const n=[...p];n[i]=e.target.value;return n})}/></div>)}
+          <div className="journal-col-title" style={{ marginBottom: 10 }}>⭐ Highlights</div>
+          <BulletList items={highlights} onChange={setHighlights} placeholder="Highlight of the week…" numbered />
         </div>
       </div>
     </div>
@@ -613,13 +716,455 @@ function StubView({ title, icon }) {
   )
 }
 
+// ── Monthly ratings row ────────────────────────────────────────
+const RATING_CATEGORIES = [
+  'Personal Growth', 'Career', 'Friends & Family',
+  'Physical & Environment', 'Finances', 'Fun & Recreation',
+  'Health', 'Spirituality',
+]
+
+function RatingRow({ label, value, onChange }) {
+  return (
+    <div className="rating-row">
+      <span className="rating-label">{label}</span>
+      <div className="rating-cells">
+        {[1,2,3,4,5,6,7,8,9,10].map(n => (
+          <button key={n}
+            className={`rating-cell${value === n ? ' active' : ''}`}
+            onClick={() => onChange(value === n ? null : n)}>
+            {n}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Monthly Review ─────────────────────────────────────────────
+function MonthlyReview({ month, userId }) {
+  const [entry,       setEntry]       = useState(null)
+  const [saving,      setSaving]      = useState(false)
+  const [howWasMonth, setHowWasMonth] = useState('')
+  const [howPen,      setHowPen]      = useState(null)
+  const [grateful,    setGrateful]    = useState([''])
+  const [highlights,  setHighlights]  = useState([''])
+  const [goingWell,   setGoingWell]   = useState([''])
+  const [notWorking,  setNotWorking]  = useState([''])
+  const [thingsStop,  setThingsStop]  = useState([''])
+  const [thingsStart, setThingsStart] = useState([''])
+  const [thingsKeep,  setThingsKeep]  = useState([''])
+  const [ratings,     setRatings]     = useState({})
+  const [improveOn,   setImproveOn]   = useState([''])
+  const [nextFocus,   setNextFocus]   = useState([''])
+
+  useEffect(() => { load() }, [month, userId]) // eslint-disable-line
+
+  async function load() {
+    if (!userId) return
+    const { data } = await supabase.from('journal_monthly_reviews').select('*')
+      .eq('user_id', userId).eq('month', month).maybeSingle()
+    setEntry(data || null)
+    if (data) {
+      setHowWasMonth(data.how_was_month || '')
+      setHowPen((data.pen_data || {}).how || null)
+      setGrateful(parseLines(data.grateful));    setHighlights(parseLines(data.highlights))
+      setGoingWell(parseLines(data.going_well)); setNotWorking(parseLines(data.not_working))
+      setThingsStop(parseLines(data.things_stop)); setThingsStart(parseLines(data.things_start))
+      setThingsKeep(parseLines(data.things_keep))
+      setRatings(data.ratings || {})
+      setImproveOn(parseLines(data.improve_on)); setNextFocus(parseLines(data.next_month_focus))
+    } else {
+      setHowWasMonth(''); setHowPen(null)
+      setGrateful(['']); setHighlights(['']); setGoingWell(['']); setNotWorking([''])
+      setThingsStop(['']); setThingsStart(['']); setThingsKeep([''])
+      setRatings({}); setImproveOn(['']); setNextFocus([''])
+    }
+  }
+
+  async function save() {
+    if (!userId || saving) return
+    setSaving(true)
+    const payload = {
+      user_id: userId, month,
+      how_was_month: howWasMonth,
+      grateful: grateful.filter(Boolean),   highlights: highlights.filter(Boolean),
+      going_well:  goingWell.filter(Boolean).join('\n'),
+      not_working: notWorking.filter(Boolean).join('\n'),
+      things_stop:  thingsStop.filter(Boolean),
+      things_start: thingsStart.filter(Boolean),
+      things_keep:  thingsKeep.filter(Boolean),
+      ratings,
+      improve_on:       improveOn.filter(Boolean).join('\n'),
+      next_month_focus: nextFocus.filter(Boolean).join('\n'),
+      pen_data: { how: howPen },
+      updated_at: new Date().toISOString(),
+    }
+    if (entry) {
+      const { data } = await supabase.from('journal_monthly_reviews').update(payload).eq('id', entry.id).select().single()
+      if (data) setEntry(data)
+    } else {
+      const { data } = await supabase.from('journal_monthly_reviews').insert(payload).select().single()
+      if (data) setEntry(data)
+    }
+    setSaving(false)
+  }
+
+  const [y, m] = month.split('-').map(Number)
+
+  return (
+    <div className="monthly-review">
+      <div className="entry-header">
+        <div>
+          <div className="entry-date" style={{ fontSize: 18 }}>Monthly Review</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 3 }}>{MONTH_NAMES[m - 1]} {y}</div>
+        </div>
+        <button className="btn-primary entry-save-btn" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : entry ? 'Update' : 'Save review'}
+        </button>
+      </div>
+
+      <div className="monthly-review-grid">
+        {/* ── Left column ── */}
+        <div className="monthly-col">
+          <div className="monthly-section">
+            <div className="journal-col-title">How was my month?</div>
+            <PenField value={howWasMonth} onChange={setHowWasMonth}
+              penData={howPen} onPenChange={setHowPen}
+              placeholder="Reflect on your month overall…" rows={5} canvasHeight={120} />
+          </div>
+
+          <div className="monthly-two-col">
+            <div className="monthly-section">
+              <div className="journal-col-title">🙏 Grateful for</div>
+              <BulletList items={grateful} onChange={setGrateful} placeholder="I'm grateful for…" numbered />
+            </div>
+            <div className="monthly-section">
+              <div className="journal-col-title">⭐ Highlights</div>
+              <BulletList items={highlights} onChange={setHighlights} placeholder="Highlight…" numbered />
+            </div>
+          </div>
+
+          <div className="monthly-section">
+            <div className="journal-col-title">✅ What's going well?</div>
+            <BulletList items={goingWell} onChange={setGoingWell} placeholder="Write here…" />
+          </div>
+
+          <div className="monthly-section">
+            <div className="journal-col-title">⚠️ What's not working?</div>
+            <BulletList items={notWorking} onChange={setNotWorking} placeholder="Write here…" />
+          </div>
+
+          <div className="monthly-section">
+            <div className="journal-col-title">Things to</div>
+            <div className="stop-start-keep">
+              <div className="ssk-col">
+                <div className="ssk-header ssk-stop">🚫 Stop doing</div>
+                <BulletList items={thingsStop} onChange={setThingsStop} placeholder="Stop…" />
+              </div>
+              <div className="ssk-col">
+                <div className="ssk-header ssk-start">✨ Start doing</div>
+                <BulletList items={thingsStart} onChange={setThingsStart} placeholder="Start…" />
+              </div>
+              <div className="ssk-col">
+                <div className="ssk-header ssk-keep">🔄 Keep doing</div>
+                <BulletList items={thingsKeep} onChange={setThingsKeep} placeholder="Keep…" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right column ── */}
+        <div className="monthly-col">
+          <div className="monthly-section">
+            <div className="journal-col-title">Monthly ratings (1–10)</div>
+            <div className="rating-num-row">
+              <span className="rating-label-spacer" />
+              {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                <span key={n} className="rating-num-hdr">{n}</span>
+              ))}
+            </div>
+            {RATING_CATEGORIES.map(cat => (
+              <RatingRow key={cat} label={cat}
+                value={ratings[cat] ?? null}
+                onChange={v => setRatings(p => ({ ...p, [cat]: v }))} />
+            ))}
+          </div>
+
+          <div className="monthly-section">
+            <div className="journal-col-title">📈 What I need to improve on</div>
+            <BulletList items={improveOn} onChange={setImproveOn} placeholder="Write here…" />
+          </div>
+
+          <div className="monthly-section">
+            <div className="journal-col-title">🎯 Next month I'll be focusing on</div>
+            <BulletList items={nextFocus} onChange={setNextFocus} placeholder="Write here…" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Month at a Glance ──────────────────────────────────────────
+function MonthAtAGlance({ month, userId }) {
+  const [entry,        setEntry]        = useState(null)
+  const [saving,       setSaving]       = useState(false)
+  const [mainFocus,    setMainFocus]    = useState('')
+  const [focusPen,     setFocusPen]     = useState(null)
+  const [goals,        setGoals]        = useState([''])
+  const [priorities,   setPriorities]   = useState([''])
+  const [todos,        setTodos]        = useState([{ text: '', done: false }])
+  const [appointments, setAppointments] = useState([{ event: '', datetime: '' }])
+  const [dayNotes,     setDayNotes]     = useState({})
+  const [note,         setNote]         = useState('')
+
+  useEffect(() => { load() }, [month, userId]) // eslint-disable-line
+
+  async function load() {
+    if (!userId) return
+    const { data } = await supabase.from('journal_monthly_glance').select('*')
+      .eq('user_id', userId).eq('month', month).maybeSingle()
+    setEntry(data || null)
+    if (data) {
+      setMainFocus(data.main_focus || '')
+      setFocusPen((data.pen_data || {}).focus || null)
+      setGoals(parseLines(data.goals)); setPriorities(parseLines(data.priorities))
+      setTodos(data.todos?.length ? data.todos : [{ text: '', done: false }])
+      setAppointments(data.appointments?.length ? data.appointments : [{ event: '', datetime: '' }])
+      setDayNotes(data.day_notes || {}); setNote(data.note || '')
+    } else {
+      setMainFocus(''); setFocusPen(null)
+      setGoals(['']); setPriorities([''])
+      setTodos([{ text: '', done: false }])
+      setAppointments([{ event: '', datetime: '' }])
+      setDayNotes({}); setNote('')
+    }
+  }
+
+  async function save() {
+    if (!userId || saving) return
+    setSaving(true)
+    const payload = {
+      user_id: userId, month,
+      main_focus: mainFocus,
+      goals: goals.filter(Boolean), priorities: priorities.filter(Boolean),
+      todos: todos.filter(t => t.text),
+      appointments: appointments.filter(a => a.event),
+      day_notes: dayNotes, note,
+      pen_data: { focus: focusPen },
+      updated_at: new Date().toISOString(),
+    }
+    if (entry) {
+      const { data } = await supabase.from('journal_monthly_glance').update(payload).eq('id', entry.id).select().single()
+      if (data) setEntry(data)
+    } else {
+      const { data } = await supabase.from('journal_monthly_glance').insert(payload).select().single()
+      if (data) setEntry(data)
+    }
+    setSaving(false)
+  }
+
+  const [y, m]  = month.split('-').map(Number)
+  const numDays = daysInMonth(y, m - 1)
+  const first   = firstDayOfMonth(y, m - 1)
+  const calCells = Array(first).fill(null).concat(Array.from({ length: numDays }, (_, i) => i + 1))
+  while (calCells.length % 7 !== 0) calCells.push(null)
+
+  function addTodo(afterIdx) {
+    setTodos(prev => { const n = [...prev]; n.splice(afterIdx + 1, 0, { text: '', done: false }); return n })
+  }
+  function addAppt(afterIdx) {
+    setAppointments(prev => { const n = [...prev]; n.splice(afterIdx + 1, 0, { event: '', datetime: '' }); return n })
+  }
+
+  return (
+    <div className="monthly-glance">
+      <div className="entry-header">
+        <div>
+          <div className="entry-date" style={{ fontSize: 18 }}>Month at a Glance</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 3 }}>{MONTH_NAMES[m - 1]} {y}</div>
+        </div>
+        <button className="btn-primary entry-save-btn" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : entry ? 'Update' : 'Save'}
+        </button>
+      </div>
+
+      <div className="glance-grid">
+        {/* ── Left: mini-cal + goals + todos ── */}
+        <div className="glance-left">
+          <div className="glance-section">
+            <div className="glance-mini-cal">
+              <div className="glance-cal-title">{MONTH_NAMES[m - 1]} {y}</div>
+              <div className="glance-cal-days">
+                {DAY_LABELS.map(d => <div key={d} className="glance-cal-label">{d}</div>)}
+              </div>
+              <div className="glance-cal-grid">
+                {calCells.map((d, i) => (
+                  <div key={i} className={`glance-cal-cell${!d ? ' empty' : ''}`}>{d || ''}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="glance-section">
+            <div className="journal-col-title">Goals</div>
+            <BulletList items={goals} onChange={setGoals} placeholder="Goal…" numbered />
+          </div>
+
+          <div className="glance-section">
+            <div className="journal-col-title">To Do</div>
+            {todos.map((todo, i) => (
+              <div key={i} className="glance-todo-row">
+                <button className={`glance-todo-check${todo.done ? ' done' : ''}`}
+                  onClick={() => setTodos(prev => prev.map((t, idx) => idx === i ? { ...t, done: !t.done } : t))}>
+                  {todo.done && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3l2 2.5L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </button>
+                <input className="journal-input bullet-input"
+                  placeholder="To do…" value={todo.text}
+                  style={{ textDecoration: todo.done ? 'line-through' : 'none', color: todo.done ? 'var(--text3)' : 'var(--text)' }}
+                  onChange={e => setTodos(prev => prev.map((t, idx) => idx === i ? { ...t, text: e.target.value } : t))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); addTodo(i) }
+                    if (e.key === 'Backspace' && todo.text === '' && todos.length > 1) { e.preventDefault(); setTodos(prev => prev.filter((_,idx) => idx !== i)) }
+                  }}
+                />
+                {todos.length > 1 && (
+                  <button className="bullet-remove" onClick={() => setTodos(prev => prev.filter((_,idx) => idx !== i))} tabIndex={-1}>×</button>
+                )}
+              </div>
+            ))}
+            <button className="bullet-add" onClick={() => addTodo(todos.length - 1)}>+ Add</button>
+          </div>
+        </div>
+
+        {/* ── Center: main focus + priorities + appointments ── */}
+        <div className="glance-center">
+          <div className="glance-section">
+            <div className="journal-col-title">Main focus this month</div>
+            <PenField value={mainFocus} onChange={setMainFocus}
+              penData={focusPen} onPenChange={setFocusPen}
+              placeholder="What matters most this month…" rows={4} canvasHeight={100} />
+          </div>
+
+          <div className="glance-section">
+            <div className="journal-col-title">Top priorities</div>
+            <BulletList items={priorities} onChange={setPriorities} placeholder="Priority…" numbered />
+          </div>
+
+          <div className="glance-section">
+            <div className="journal-col-title">Appointments / Events</div>
+            <div className="appt-table">
+              <div className="appt-header-row">
+                <span className="appt-n">#</span>
+                <span className="appt-event-hdr">Appointment / Event</span>
+                <span className="appt-dt-hdr">Date / Time</span>
+              </div>
+              {appointments.map((a, i) => (
+                <div key={i} className="appt-row">
+                  <span className="appt-n">{i + 1}</span>
+                  <input className="journal-input appt-event-input"
+                    placeholder="Event…" value={a.event}
+                    onChange={e => setAppointments(prev => prev.map((x,idx) => idx===i ? {...x,event:e.target.value} : x))}
+                    onKeyDown={e => e.key === 'Enter' && addAppt(i)}
+                  />
+                  <input className="journal-input appt-dt-input"
+                    placeholder="Date / time…" value={a.datetime}
+                    onChange={e => setAppointments(prev => prev.map((x,idx) => idx===i ? {...x,datetime:e.target.value} : x))}
+                  />
+                  {appointments.length > 1 && (
+                    <button className="bullet-remove" onClick={() => setAppointments(prev => prev.filter((_,idx) => idx!==i))} tabIndex={-1}>×</button>
+                  )}
+                </div>
+              ))}
+              <button className="bullet-add" onClick={() => addAppt(appointments.length - 1)}>+ Add</button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right: day-by-day notes ── */}
+        <div className="glance-right">
+          <div className="glance-section">
+            <div className="journal-col-title">Day notes</div>
+            <div className="day-notes-grid">
+              {Array.from({ length: numDays }, (_, i) => i + 1).map(d => (
+                <div key={d} className="day-note-row">
+                  <span className="day-note-num">{d}</span>
+                  <input className="journal-input bullet-input day-note-input"
+                    placeholder="—"
+                    value={dayNotes[d] || ''}
+                    onChange={e => setDayNotes(p => ({ ...p, [d]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="glance-section" style={{ marginTop: 16 }}>
+            <div className="journal-col-title">Notes</div>
+            <textarea className="journal-input" rows={4} placeholder="Notes…" value={note} onChange={e => setNote(e.target.value)} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Monthly page wrapper (tabs + month bar) ────────────────────
+function MonthlyPage({ month, onMonthChange, subView, onSubViewChange, userId }) {
+  const [y, m] = month.split('-').map(Number)
+
+  function setYear(delta) {
+    onMonthChange(`${y + delta}-${String(m).padStart(2, '0')}`)
+  }
+
+  return (
+    <div className="monthly-page">
+      {/* Sub-view tabs */}
+      <div className="monthly-sub-tabs">
+        <button className={`msub-tab${subView === 'review' ? ' active' : ''}`}
+          onClick={() => onSubViewChange('review')}>📋 Monthly Review</button>
+        <button className={`msub-tab${subView === 'glance' ? ' active' : ''}`}
+          onClick={() => onSubViewChange('glance')}>📊 Month at a Glance</button>
+      </div>
+
+      {/* Month picker bar */}
+      <div className="monthly-month-bar">
+        <button className="cal-nav-btn" onClick={() => setYear(-1)} title="Previous year">‹‹</button>
+        {MONTH_NAMES.map((name, i) => {
+          const mm = `${y}-${String(i + 1).padStart(2, '0')}`
+          return (
+            <button key={i} className={`month-chip${mm === month ? ' active' : ''}`}
+              onClick={() => onMonthChange(mm)}>
+              {name.slice(0, 3)}
+            </button>
+          )
+        })}
+        <button className="cal-nav-btn" onClick={() => setYear(1)} title="Next year">››</button>
+        <span className="monthly-year-label">{y}</span>
+      </div>
+
+      <div className="monthly-body">
+        {subView === 'review' && <MonthlyReview key={month} month={month} userId={userId} />}
+        {subView === 'glance' && <MonthAtAGlance key={month} month={month} userId={userId} />}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Journal ──────────────────────────────────────────────
 export default function Journal({ userId }) {
-  const [view,        setView]        = useState('daily')
-  const [selectedDate,setSelectedDate]= useState(todayStr())
-  const [weekStart,   setWeekStart]   = useState(() => getWeekStart(todayStr()))
-  const [loggedDates, setLoggedDates] = useState(new Set())
-  const [healthLog,   setHealthLog]   = useState(null)
+  const [view,           setView]           = useState('daily')
+  const [selectedDate,   setSelectedDate]   = useState(todayStr())
+  const [weekStart,      setWeekStart]      = useState(() => getWeekStart(todayStr()))
+  const [loggedDates,    setLoggedDates]    = useState(new Set())
+  const [healthLog,      setHealthLog]      = useState(null)
+  const [monthlySubView, setMonthlySubView] = useState('review')
+  const [monthlyMonth,   setMonthlyMonth]   = useState(() => todayStr().slice(0, 7))
+
+  function openMonthly(month, subView) {
+    setMonthlyMonth(month)
+    setMonthlySubView(subView)
+    setView('monthly')
+  }
 
   // Load all logged dates for dot indicators
   useEffect(() => {
@@ -668,9 +1213,9 @@ export default function Journal({ userId }) {
 
         {/* Right: content */}
         <div className="journal-main">
-          {view === 'daily'     && <DailyEntry key={selectedDate} date={selectedDate} userId={userId} healthLog={healthLog} onLogged={markLogged} />}
+          {view === 'daily'     && <DailyEntry key={selectedDate} date={selectedDate} userId={userId} healthLog={healthLog} onLogged={markLogged} onOpenMonthly={openMonthly} />}
           {view === 'weekly'    && <WeeklyView weekStart={weekStart} userId={userId} />}
-          {view === 'monthly'   && <StubView title="Monthly Review" icon="📅" />}
+          {view === 'monthly'   && <MonthlyPage month={monthlyMonth} onMonthChange={setMonthlyMonth} subView={monthlySubView} onSubViewChange={setMonthlySubView} userId={userId} />}
           {view === 'quarterly' && <StubView title="Quarterly Planner" icon="🔷" />}
           {view === 'yearly'    && <StubView title="Yearly Planner" icon="⭐" />}
         </div>
