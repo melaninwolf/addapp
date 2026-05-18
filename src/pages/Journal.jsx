@@ -705,6 +705,52 @@ function WeeklyView({ weekStart, userId }) {
   )
 }
 
+// ── Year at a Glance ──────────────────────────────────────────
+function YearAtAGlance({ year, onYearChange, onSelectDate }) {
+  const today = todayStr()
+  const DOW_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+  return (
+    <div className="year-glance">
+      {/* Year nav */}
+      <div className="year-nav">
+        <button className="cal-nav-btn" onClick={() => onYearChange(year - 1)}>‹</button>
+        <span className="year-nav-label">{year}</span>
+        <button className="cal-nav-btn" onClick={() => onYearChange(year + 1)}>›</button>
+      </div>
+
+      {/* 12-month grid */}
+      <div className="yg-grid">
+        {MONTH_NAMES.map((monthName, mi) => {
+          const m       = mi + 1
+          const numDays = daysInMonth(year, mi)
+          return (
+            <div key={mi} className="yg-month">
+              <div className="yg-month-header">{monthName.slice(0, 3).toUpperCase()}</div>
+              {Array.from({ length: numDays }, (_, i) => {
+                const d   = i + 1
+                const ds  = `${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                const dow = new Date(year, mi, d).getDay()  // 0=Sun, 6=Sat
+                const isSat   = dow === 6
+                const isSun   = dow === 0
+                const isToday = ds === today
+                return (
+                  <button key={d}
+                    className={`yg-day${isSat ? ' yg-sat' : ''}${isSun ? ' yg-sun' : ''}${isToday ? ' yg-today' : ''}`}
+                    onClick={() => onSelectDate(ds)}>
+                    <span className="yg-dow">{DOW_LABELS[dow]}</span>
+                    <span className="yg-date">{d}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Stub ──────────────────────────────────────────────────────
 function StubView({ title, icon }) {
   return (
@@ -1159,11 +1205,18 @@ export default function Journal({ userId }) {
   const [healthLog,      setHealthLog]      = useState(null)
   const [monthlySubView, setMonthlySubView] = useState('review')
   const [monthlyMonth,   setMonthlyMonth]   = useState(() => todayStr().slice(0, 7))
+  const [yearlyYear,     setYearlyYear]     = useState(() => new Date().getFullYear())
 
   function openMonthly(month, subView) {
     setMonthlyMonth(month)
     setMonthlySubView(subView)
     setView('monthly')
+  }
+
+  function openDaily(ds) {
+    setSelectedDate(ds)
+    setWeekStart(getWeekStart(ds))
+    setView('daily')
   }
 
   // Load all logged dates for dot indicators
@@ -1217,7 +1270,7 @@ export default function Journal({ userId }) {
           {view === 'weekly'    && <WeeklyView weekStart={weekStart} userId={userId} />}
           {view === 'monthly'   && <MonthlyPage month={monthlyMonth} onMonthChange={setMonthlyMonth} subView={monthlySubView} onSubViewChange={setMonthlySubView} userId={userId} />}
           {view === 'quarterly' && <StubView title="Quarterly Planner" icon="🔷" />}
-          {view === 'yearly'    && <StubView title="Yearly Planner" icon="⭐" />}
+          {view === 'yearly'    && <YearAtAGlance year={yearlyYear} onYearChange={setYearlyYear} onSelectDate={openDaily} />}
         </div>
       </div>
     </div>
