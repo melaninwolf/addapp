@@ -353,9 +353,13 @@ const WEEK_FILTERS = [
   { key: 'events',   label: 'Events',   emoji: '📅' },
 ]
 
-function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onEditLog }) {
+function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onEditLog, onUpdateBlock }) {
   const [anchor,  setAnchor]  = useState(() => new Date(selected))
   const [filters, setFilters] = useState(new Set(['routines', 'focus', 'tasks', 'events']))
+  const wvScrollRef = useRef(null)
+  const wvGridRef   = useRef(null)
+  const wvDragRef   = useRef(null)
+  const [wvDragVis, setWvDragVis] = useState(null)
   const weekDays = getWeekDays(anchor)
 
   function prev() { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d) }
@@ -376,6 +380,121 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
   const totalItems    = todayRoutines + todayTasks + todayEvents
 
   const hours = Array.from({ length: WV_HOURS }, (_, i) => WV_START + i)
+
+  // ── Week-view drag helpers ────────────────────────────────────────
+  function getWvTarget(clientX, clientY) {
+    const gridEl = wvGridRef.current
+    if (!gridEl) return null
+    const cols = gridEl.querySelectorAll('[data-wv-colidx]')
+    let colIdx = -1; let timedRect = null
+    for (const col of cols) {
+      const r = col.getBoundingClientRect()
+      if (clientX >= r.left && clientX < r.right) {
+        colIdx = parseInt(col.dataset.wvColidx)
+        const timedEl = col.querySelector('.wv-timed')
+        if (timedEl) timedRect = timedEl.getBoundingClientRect()
+        break
+      }
+    }
+    if (colIdx === -1 || !timedRect) return null
+    const relY    = clientY - timedRect.top
+    const rawMins = WV_START * 60 + (relY / WV_PX) * 60
+    const snapped = Math.round(rawMins / 15) * 15
+    const clamped = Math.max(WV_START * 60, Math.min(WV_END * 60 - 30, snapped))
+    return { colIdx, minutes: clamped }
+  }
+
+  function startWvBlockDrag(clientX, clientY, block, originalColIdx, isTouch, nativeEvent) {
+    nativeEvent.stopPropagation()
+    nativeEvent.preventDefault()
+
+    const target    = getWvTarget(clientX, clientY)
+    const offsetMin = target ? Math.max(0, target.minutes - block.startMin) : 0
+
+    let dragBg, dragBorder
+    if (block.type === 'routine') {
+      dragBg = 'var(--accent-glow)'; dragBorder = 'var(--accent)'
+    } else if (block.type === 'task') {
+      const c = block.data._catColor
+      dragBg = c ? `${c}18` : 'var(--green-bg)'; dragBorder = c || 'var(--green)'
+    } else {
+      dragBg = TYPE_BG[block.subtype] || 'var(--bg3)'
+      dragBorder = TYPE_BORDER[block.subtype] || 'var(--accent)'
+    }
+
+    wvDragRef.current = {
+      eventId:          block.data.id,
+      blockType:        block.type,
+      originalColIdx,
+      originalStartMin: block.startMin,
+      durMin:           block.durMin,
+      offsetMin,
+      currentColIdx:    originalColIdx,
+      currentStartMin:  block.startMin,
+      data:             block.data,
+      subtype:          block.subtype,
+      moved:            false,
+    }
+    setWvDragVis({
+      eventId:   block.data.id,
+      blockType: block.type,
+      colIdx:    originalColIdx,
+      startMin:  block.startMin,
+      durMin:    block.durMin,
+      emoji:     block.data.emoji || (block.type === 'task' ? '✅' : '📅'),
+      title:     block.data.title || block.data.name || '',
+      dragBg, dragBorder,
+    })
+
+    function onMove(ev) {
+      const cx = isTouch ? ev.touches[0].clientX : ev.clientX
+      const cy = isTouch ? ev.touches[0].clientY : ev.clientY
+      const t  = getWvTarget(cx, cy)
+      if (!t) return
+      if (isTouch) ev.preventDefault()
+
+      const d        = wvDragRef.current
+      const rawSnap  = Math.round((t.minutes - d.offsetMin) / 15) * 15
+      const clampMin = Math.max(WV_START * 60, Math.min(WV_END * 60 - d.durMin, rawSnap))
+
+      if (Math.abs(clampMin - d.originalStartMin) > 5 || t.colIdx !== d.originalColIdx) d.moved = true
+      d.currentStartMin = clampMin
+      // Routines stay in original column (changing day would alter the weekly recurrence)
+      d.currentColIdx = d.blockType === 'routine' ? d.originalColIdx : t.colIdx
+      setWvDragVis(v => v ? { ...v, startMin: clampMin, colIdx: d.currentColIdx } : null)
+    }
+
+    function onUp() {
+      const d = wvDragRef.current
+      if (d?.moved) {
+        const newTime   = minsToTime(d.currentStartMin)
+        const targetDay = weekDays[d.currentColIdx]
+        const payload   = {
+          start_time: newTime,
+          end_time:   minsToTime(d.currentStartMin + d.durMin),
+          ...(d.blockType !== 'routine' && { new_date: formatDateForInput(targetDay) }),
+        }
+        onUpdateBlock && onUpdateBlock(d.blockType, d.eventId, payload)
+      }
+      wvDragRef.current = null
+      setWvDragVis(null)
+      if (isTouch) {
+        document.removeEventListener('touchmove', onMove)
+        document.removeEventListener('touchend', onUp)
+      } else {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+      }
+    }
+
+    if (isTouch) {
+      document.addEventListener('touchmove', onMove, { passive: false })
+      document.addEventListener('touchend', onUp)
+    } else {
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    }
+  }
 
   return (
     <div className="cal-week-layout">
@@ -403,8 +522,8 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
       </div>
 
       {/* Time grid */}
-      <div className="wv-scroll">
-        <div className="wv-grid-wrap">
+      <div className="wv-scroll" ref={wvScrollRef}>
+        <div className="wv-grid-wrap" ref={wvGridRef}>
           {/* Time gutter */}
           <div className="wv-gutter">
             {hours.map(h => (
@@ -438,6 +557,7 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
             return (
               <div
                 key={i}
+                data-wv-colidx={i}
                 className={['wv-col', isToday && 'wv-col-today', isSelected && 'wv-col-selected'].filter(Boolean).join(' ')}
                 onClick={() => setSelected(date)}
               >
@@ -494,10 +614,13 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                       : (r.steps?.reduce((a, s) => a + (s.dur || 0), 0) || 30)
                     const top = minsToTop(startMins)
                     if (top < -20 || top > WV_HOURS * WV_PX + 20) return null
+                    const isWvDragging = wvDragVis?.eventId === r.id
                     return (
                       <div key={r.id}
-                        className={`wv-block wv-block-routine${r._logStatus ? ' wv-done' : ''}`}
-                        style={{ top, height: minsToHeight(dur) }}
+                        className={`wv-block wv-block-routine ev-draggable${r._logStatus ? ' wv-done' : ''}${isWvDragging ? ' ev-dragging' : ''}`}
+                        style={{ top, height: minsToHeight(dur), opacity: isWvDragging ? 0.3 : 1 }}
+                        onMouseDown={ev => startWvBlockDrag(ev.clientX, ev.clientY, { type: 'routine', data: r, startMin: startMins, durMin: dur, subtype: null }, i, false, ev)}
+                        onTouchStart={ev => startWvBlockDrag(ev.touches[0].clientX, ev.touches[0].clientY, { type: 'routine', data: r, startMin: startMins, durMin: dur, subtype: null }, i, true, ev)}
                         onClick={ev => ev.stopPropagation()}>
                         <span className="wvb-emoji">{r.emoji}</span>
                         <div className="wvb-body">
@@ -519,15 +642,19 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                     const dur = endMins ? endMins - startMins : 60
                     const top = minsToTop(startMins)
                     if (top < -20 || top > WV_HOURS * WV_PX + 20) return null
+                    const isWvDragging = wvDragVis?.eventId === e.id
                     return (
                       <div key={e.id}
-                        className="wv-block"
+                        className={`wv-block ev-draggable${isWvDragging ? ' ev-dragging' : ''}`}
                         style={{
                           top,
                           height: minsToHeight(dur),
                           borderLeft: `3px solid ${TYPE_BORDER[e.type] || 'var(--accent)'}`,
                           background: TYPE_BG[e.type] || 'var(--accent-glow)',
+                          opacity: isWvDragging ? 0.3 : 1,
                         }}
+                        onMouseDown={ev => startWvBlockDrag(ev.clientX, ev.clientY, { type: 'custom', data: e, startMin: startMins, durMin: dur, subtype: e.type }, i, false, ev)}
+                        onTouchStart={ev => startWvBlockDrag(ev.touches[0].clientX, ev.touches[0].clientY, { type: 'custom', data: e, startMin: startMins, durMin: dur, subtype: e.type }, i, true, ev)}
                         onClick={ev => ev.stopPropagation()}>
                         <span className="wvb-emoji">{e.emoji}</span>
                         <div className="wvb-body">
@@ -565,15 +692,18 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                     if (startMins == null) return null
                     const top = minsToTop(startMins)
                     if (top < -20 || top > WV_HOURS * WV_PX + 20) return null
+                    const isWvDragging = wvDragVis?.eventId === t.id
                     return (
                       <div key={t.id}
-                        className={`wv-block wv-block-task${t._done ? ' wv-done' : ''}`}
+                        className={`wv-block wv-block-task ev-draggable${t._done ? ' wv-done' : ''}${isWvDragging ? ' ev-dragging' : ''}`}
                         style={{
                           top, height: minsToHeight(30),
                           borderLeft: `3px solid ${t._catColor || 'var(--green)'}`,
-                          background: t._catColor ? t._catColor + '18' : 'var(--green-bg)',
-                          opacity: t._done ? 0.55 : 1,
+                          background: t._catColor ? `${t._catColor}18` : 'var(--green-bg)',
+                          opacity: isWvDragging ? 0.3 : t._done ? 0.55 : 1,
                         }}
+                        onMouseDown={ev => startWvBlockDrag(ev.clientX, ev.clientY, { type: 'task', data: t, startMin: startMins, durMin: 30, subtype: 'task' }, i, false, ev)}
+                        onTouchStart={ev => startWvBlockDrag(ev.touches[0].clientX, ev.touches[0].clientY, { type: 'task', data: t, startMin: startMins, durMin: 30, subtype: 'task' }, i, true, ev)}
                         onClick={ev => ev.stopPropagation()}>
                         <span className="wvb-emoji">✅</span>
                         <div className="wvb-body">
@@ -582,6 +712,26 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                       </div>
                     )
                   })}
+                  {/* Week-view drag ghost */}
+                  {wvDragVis?.colIdx === i && (
+                    <div className="wv-block ev-ghost"
+                      style={{
+                        top:             minsToTop(wvDragVis.startMin),
+                        height:          minsToHeight(wvDragVis.durMin),
+                        left: 4, right: 4,
+                        background:      wvDragVis.dragBg,
+                        borderColor:     wvDragVis.dragBorder,
+                        borderLeftColor: wvDragVis.dragBorder,
+                        pointerEvents:   'none',
+                        zIndex:          10,
+                      }}>
+                      <span className="wvb-emoji">{wvDragVis.emoji}</span>
+                      <div className="wvb-body">
+                        <div className="wvb-name">{wvDragVis.title}</div>
+                        <div className="wvb-time">{fmtTime(minsToTime(wvDragVis.startMin))}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -983,7 +1133,7 @@ function hourLabel(h) {
   return `${h - 12} PM`
 }
 
-function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onUpdateEvent, onViewEvent, onEditLog }) {
+function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onUpdateBlock, onViewEvent, onEditLog }) {
   const [now, setNow] = useState(() => new Date())
   const scrollRef = useRef(null)
   const dragRef   = useRef(null)
@@ -1060,60 +1210,72 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
   ]
   const eventBlocks = layoutEvents(rawBlocks)
 
-  // ── Drag handlers ──────────────────────────────────────────
-  function onBlockMouseDown(e, block) {
-    if (block.type !== 'custom') return
-    e.preventDefault()
-    e.stopPropagation()
+  // ── Drag handlers (mouse + touch, all non-gcal block types) ──────────
+  function startBlockDrag(clientY, block, isTouch, nativeEvent) {
+    if (block.type === 'gcal') return
+    nativeEvent.preventDefault()
+    nativeEvent.stopPropagation()
 
     const scrollEl  = scrollRef.current
     const gridRect  = scrollEl.getBoundingClientRect()
     const scrollTop = scrollEl.scrollTop
-    const yInGrid   = e.clientY - gridRect.top + scrollTop
+    const yInGrid   = clientY - gridRect.top + scrollTop
     const offsetMin = Math.max(0, (yInGrid / PX_PER_HOUR) * 60 - block.startMin)
 
-    const info = {
-      eventId: block.data.id,
-      durMin: block.durMin,
+    let dragBg, dragBorder
+    if (block.type === 'routine') {
+      dragBg = 'var(--accent-glow)'; dragBorder = 'var(--accent)'
+    } else if (block.type === 'task') {
+      const c = block.data._catColor
+      dragBg = c ? `${c}18` : 'var(--green-bg)'; dragBorder = c || 'var(--green)'
+    } else {
+      dragBg = TYPE_BG[block.subtype] || 'var(--bg3)'
+      dragBorder = TYPE_BORDER[block.subtype] || 'var(--accent)'
+    }
+
+    dragRef.current = {
+      eventId:          block.data.id,
+      blockType:        block.type,
+      durMin:           block.durMin,
       originalStartMin: block.startMin,
       offsetMin,
-      currentStartMin: block.startMin,
-      data: block.data,
-      subtype: block.subtype,
-      moved: false,
+      currentStartMin:  block.startMin,
+      data:             block.data,
+      subtype:          block.subtype,
+      moved:            false,
     }
-    dragRef.current = info
     setDragVis({
-      eventId: block.data.id,
-      startMin: block.startMin,
-      durMin: block.durMin,
-      emoji: block.data.emoji,
-      title: block.data.title,
-      subtype: block.subtype,
+      eventId:   block.data.id,
+      blockType: block.type,
+      startMin:  block.startMin,
+      durMin:    block.durMin,
+      emoji:     block.data.emoji || (block.type === 'task' ? '✅' : '📅'),
+      title:     block.data.title || block.data.name || '',
+      subtype:   block.subtype,
+      dragBg, dragBorder,
     })
 
     function onMove(ev) {
-      const rect  = scrollEl.getBoundingClientRect()
-      const sTop  = scrollEl.scrollTop
-      const y     = ev.clientY - rect.top + sTop
-      const raw   = (y / PX_PER_HOUR) * 60 - dragRef.current.offsetMin
-      const snap  = Math.round(raw / 15) * 15
+      const y    = isTouch ? ev.touches[0].clientY : ev.clientY
+      const rect = scrollEl.getBoundingClientRect()
+      const sTop = scrollEl.scrollTop
+      const yVal = y - rect.top + sTop
+      const raw  = (yVal / PX_PER_HOUR) * 60 - dragRef.current.offsetMin
+      const snap = Math.round(raw / 15) * 15
       const clamp = Math.max(0, Math.min(1440 - dragRef.current.durMin, snap))
-      if (Math.abs(clamp - dragRef.current.originalStartMin) > 5) {
-        dragRef.current.moved = true
-      }
+      if (Math.abs(clamp - dragRef.current.originalStartMin) > 5) dragRef.current.moved = true
       dragRef.current.currentStartMin = clamp
       setDragVis(v => v ? { ...v, startMin: clamp } : null)
+      if (isTouch) ev.preventDefault()
     }
 
     function onUp() {
       const d = dragRef.current
       if (d) {
-        if (!d.moved) {
-          // It was a tap/click — open detail view
+        if (!d.moved && d.blockType === 'custom') {
           onViewEvent && onViewEvent(d.data)
-        } else if (d.currentStartMin !== d.originalStartMin) {
-          onUpdateEvent && onUpdateEvent(d.eventId, {
+        } else if (d.moved && d.currentStartMin !== d.originalStartMin) {
+          onUpdateBlock && onUpdateBlock(d.blockType, d.eventId, {
             start_time: minsToTime(d.currentStartMin),
             end_time:   minsToTime(d.currentStartMin + d.durMin),
           })
@@ -1121,12 +1283,22 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
       }
       dragRef.current = null
       setDragVis(null)
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      if (isTouch) {
+        document.removeEventListener('touchmove', onMove)
+        document.removeEventListener('touchend', onUp)
+      } else {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+      }
     }
 
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    if (isTouch) {
+      document.addEventListener('touchmove', onMove, { passive: false })
+      document.addEventListener('touchend', onUp)
+    } else {
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    }
   }
 
   const dateLabel = (
@@ -1219,18 +1391,18 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
               const pastCls  = isMissed ? ' ev-missed' : isPast ? ' ev-past' : ''
 
               // Whether this block is being dragged
-              const isDragging = dragVis?.eventId === block.data?.id && block.type === 'custom'
+              const isDragging = dragVis?.eventId === block.data?.id && block.type !== 'gcal'
 
-              // Custom event style overrides
-              const taskColor   = block.type === 'task' ? (block.data._catColor || 'var(--green)') : null
+              // Per-type style overrides
+              const taskColor   = block.type === 'task' ? block.data._catColor : null
               const customStyle = (block.type === 'custom' && !isMissed) ? {
                 background:      TYPE_BG[block.subtype]     || 'var(--bg3)',
                 borderColor:     TYPE_BORDER[block.subtype] || 'var(--accent)',
                 borderLeftColor: TYPE_BORDER[block.subtype] || 'var(--accent)',
               } : block.type === 'task' ? {
-                background:      taskColor + '18',
-                borderColor:     taskColor,
-                borderLeftColor: taskColor,
+                background:      taskColor ? `${taskColor}18` : 'var(--green-bg)',
+                borderColor:     taskColor || 'var(--green)',
+                borderLeftColor: taskColor || 'var(--green)',
                 opacity:         block.data._done ? 0.5 : 1,
               } : {}
 
@@ -1244,11 +1416,12 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                     block.type === 'task'   ? 'day-event-custom' : 'day-event-routine',
                     pastCls,
                     isDragging ? 'ev-dragging' : '',
-                    block.type === 'custom' ? 'ev-draggable' : '',
+                    block.type !== 'gcal' ? 'ev-draggable' : '',
                   ].filter(Boolean).join(' ')}
                   style={{ top, height, left: colLeft, width: colWidth, right: 'auto', ...customStyle }}
-                  onMouseDown={block.type === 'custom' ? e => onBlockMouseDown(e, block) : undefined}
-                  onClick={block.type !== 'custom' ? () => onViewEvent && onViewEvent(block.data) : undefined}
+                  onMouseDown={block.type !== 'gcal' ? e => startBlockDrag(e.clientY, block, false, e) : undefined}
+                  onTouchStart={block.type !== 'gcal' ? e => startBlockDrag(e.touches[0].clientY, block, true, e) : undefined}
+                  onClick={block.type === 'gcal' ? () => onViewEvent && onViewEvent(block.data) : undefined}
                 >
                   {block.type === 'routine' ? (
                     <>
@@ -1309,13 +1482,13 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
               <div
                 className="day-event-block day-event-custom ev-ghost"
                 style={{
-                  top:    (dragVis.startMin / 60) * PX_PER_HOUR,
-                  height: Math.max(24, (dragVis.durMin / 60) * PX_PER_HOUR - 2),
+                  top:             (dragVis.startMin / 60) * PX_PER_HOUR,
+                  height:          Math.max(24, (dragVis.durMin / 60) * PX_PER_HOUR - 2),
                   left: 6, right: 6,
-                  background:      TYPE_BG[dragVis.subtype]     || 'var(--bg3)',
-                  borderColor:     TYPE_BORDER[dragVis.subtype] || 'var(--accent)',
-                  borderLeftColor: TYPE_BORDER[dragVis.subtype] || 'var(--accent)',
-                  pointerEvents: 'none',
+                  background:      dragVis.dragBg,
+                  borderColor:     dragVis.dragBorder,
+                  borderLeftColor: dragVis.dragBorder,
+                  pointerEvents:   'none',
                 }}
               >
                 <span className="deb-emoji">{dragVis.emoji}</span>
@@ -1354,7 +1527,7 @@ export default function Calendar({ userId }) {
   const [tasks,          setTasks]          = useState([])
   const [taskCategories, setTaskCategories] = useState([])
   const [routineLogs,    setRoutineLogs]    = useState([])
-  const [editLogModal,   setEditLogModal]   = useState(null) // null | { logId, name, emoji, dateStr, startHHMM, endHHMM }
+  const [editLogModal,   setEditLogModal]   = useState(null) // null | { logId, name, emoji }
   const [editLogStart,   setEditLogStart]   = useState('')
   const [editLogEnd,     setEditLogEnd]     = useState('')
 
@@ -1474,10 +1647,9 @@ export default function Calendar({ userId }) {
           l.routine_id === r.id && l.started_at?.startsWith(dateStr)
         )
         if (!log) return r
-        // Attach actual times so views can display them
         const toHHMM = ts => {
           const d = new Date(ts)
-          return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+          return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')
         }
         return {
           ...r,
@@ -1504,7 +1676,7 @@ export default function Calendar({ userId }) {
       const d = new Date(refDate); d.setHours(h, m, 0, 0)
       return d.toISOString()
     }
-    const ref = selected // use currently selected date as date reference
+    const ref = selected
     const updates = {
       started_at: toISO(editLogStart, ref),
       ended_at:   toISO(editLogEnd, ref) || null,
@@ -1521,7 +1693,6 @@ export default function Calendar({ userId }) {
     return calEvents.filter(e => {
       const eventDate = parseDateLocal(e.date)
       if (!eventDate) return false
-
       if (!e.repeat_type || e.repeat_type === 'none') {
         const endDateVal = e.end_date ? parseDateLocal(e.end_date) : eventDate
         return normDate >= eventDate && normDate <= endDateVal
@@ -1589,6 +1760,29 @@ export default function Calendar({ userId }) {
     }
   }
 
+  // ── Unified block update: routes to the right table by type ──────────
+  async function updateBlock(type, id, payload) {
+    if (!userId) return
+    if (type === 'custom') {
+      const update = { start_time: payload.start_time, end_time: payload.end_time }
+      if (payload.new_date) { update.date = payload.new_date; update.end_date = payload.new_date }
+      return updateCalendarEvent(id, update)
+    }
+    if (type === 'routine') {
+      const { error } = await supabase.from('routines')
+        .update({ time: payload.start_time })
+        .eq('id', id).eq('user_id', userId)
+      if (!error) setRoutines(prev => prev.map(r => r.id === id ? { ...r, time: payload.start_time } : r))
+    }
+    if (type === 'task') {
+      const update = { due_time: payload.start_time }
+      if (payload.new_date) update.due_date = payload.new_date
+      const { error } = await supabase.from('tasks')
+        .update(update).eq('id', id).eq('user_id', userId)
+      if (!error) setTasks(prev => prev.map(t => t.id === id ? { ...t, ...update } : t))
+    }
+  }
+
   async function deleteCalendarEvent(id) {
     if (!userId) return
     const { error } = await supabase
@@ -1614,13 +1808,10 @@ export default function Calendar({ userId }) {
     })
   }
 
-  // Open detail from DayView (routines/gcal are read-only — no edit)
   function handleViewEvent(eventOrRoutine) {
-    // Only show the full detail modal for custom calendar events
     if (eventOrRoutine.title !== undefined) {
       setViewingEvent(eventOrRoutine)
     }
-    // Routines & gcal events — could add a read-only popup later
   }
 
   const VIEWS = ['Day', 'Week', 'Month']
@@ -1645,15 +1836,15 @@ export default function Calendar({ userId }) {
           ) : (
             <button className="gcal-btn" onClick={connectGcal}
               disabled={gcalLoading || !gisReady}
-              title={!gisReady ? 'Loading Google…' : 'Connect Google Calendar'}>
-              {gcalLoading ? 'Connecting…' : '+ Google Calendar'}
+              title={!gisReady ? 'Loading Google...' : 'Connect Google Calendar'}>
+              {gcalLoading ? 'Connecting...' : '+ Google Calendar'}
             </button>
           )}
 
           <div className="cal-view-switcher">
             {VIEWS.map(v => (
               <button key={v}
-                className={`cal-view-btn${view === v.toLowerCase() ? ' active' : ''}`}
+                className={'cal-view-btn' + (view === v.toLowerCase() ? ' active' : '')}
                 onClick={() => setView(v.toLowerCase())}>
                 {v}
               </button>
@@ -1666,7 +1857,7 @@ export default function Calendar({ userId }) {
 
       {loading ? (
         <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'40vh', color:'var(--text3)', fontSize:14 }}>
-          Loading…
+          Loading...
         </div>
       ) : view === 'month' ? (
         <MonthView today={today} selected={selected} setSelected={setSelected}
@@ -1677,12 +1868,12 @@ export default function Calendar({ userId }) {
         <WeekView  today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
           customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
-          onEditLog={openCalEditLog} />
+          onEditLog={openCalEditLog} onUpdateBlock={updateBlock} />
       ) : (
         <DayView   today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
           customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
-          onUpdateEvent={updateCalendarEvent}
+          onUpdateBlock={updateBlock}
           onViewEvent={handleViewEvent} onEditLog={openCalEditLog} />
       )}
 
@@ -1717,7 +1908,7 @@ export default function Calendar({ userId }) {
           <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Edit session times</h2>
-              <button className="modal-close" onClick={() => setEditLogModal(null)}>×</button>
+              <button className="modal-close" onClick={() => setEditLogModal(null)}>x</button>
             </div>
             <div className="modal-body">
               <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
