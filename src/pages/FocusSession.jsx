@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { LocalNotifications } from '@capacitor/local-notifications'
 import { supabase } from '../supabase'
 import { addMAM, MAM_FOCUS } from '../xp'
 import './FocusSession.css'
@@ -36,9 +37,32 @@ function fmt(secs) {
   return `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
 }
 
-function notify(title, body) {
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '/favicon.ico' })
+async function notify(title, body) {
+  try {
+    const permission = await LocalNotifications.checkPermissions()
+    if (permission.display !== 'granted') {
+      await LocalNotifications.requestPermissions()
+    }
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          title,
+          body,
+          id: Math.floor(Math.random() * 1000000),
+          schedule: { at: new Date(Date.now() + 100) },
+          sound: null,
+          attachments: null,
+          actionTypeId: '',
+          extra: null,
+        },
+      ],
+    })
+  } catch (e) {
+    console.error('Notification error:', e)
+    // Fallback to web notification if on web
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/favicon.ico' })
+    }
   }
 }
 

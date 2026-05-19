@@ -81,6 +81,51 @@ function getMetricVal(m, log) {
   return map[m] ?? null
 }
 
+// ── Card subtitle (derived notes) ────────────────────────────
+function MetricCardSub({ m, log }) {
+  if (!log) return null
+  if (m === 'energy') {
+    const v = log.energy_score
+    if (v == null) return null
+    const label = v >= 80 ? 'feeling great' : v >= 60 ? 'feeling pretty good' : v >= 40 ? 'feeling okay' : 'low energy today'
+    return <span className="hc-sub">{label}</span>
+  }
+  if (m === 'sleep') {
+    const hasTime = log.sleep_start && log.wake_time
+    if (hasTime) {
+      const hrs = calcSleepHours(log.sleep_start, log.wake_time)
+      const si  = sleepScoreInfo(log.sleep_score)
+      return <span className="hc-sub">{log.sleep_start.slice(0,5)} → {log.wake_time.slice(0,5)}{si ? ` · ${si.label}` : ''}</span>
+    }
+    return null
+  }
+  if (m === 'stress') {
+    const v = log.stress_score
+    if (v == null) return null
+    const label = v <= 2 ? 'very calm' : v <= 4 ? 'low — manageable' : v <= 6 ? 'moderate' : v <= 8 ? 'elevated' : 'high stress'
+    return <span className="hc-sub">{label}</span>
+  }
+  if (m === 'workout') {
+    const intensity = log.workout_intensity ? WORKOUT_INTENSITY[log.workout_intensity] : null
+    const mins = log.workout_mins
+    const parts = [intensity, mins ? `${mins} min` : null].filter(Boolean)
+    if (!parts.length) return null
+    return <span className="hc-sub">{parts.join(' · ')}</span>
+  }
+  if (m === 'steps') {
+    const v = log.steps
+    if (v == null) return null
+    const label = v >= 10000 ? '🎯 goal reached' : v >= 7500 ? 'on track for 10k' : v >= 5000 ? 'halfway there' : 'just getting started'
+    return <span className="hc-sub">{label}</span>
+  }
+  if (m === 'meditation') {
+    const v = log.meditation_mins
+    if (v == null) return null
+    return <span className="hc-sub">logged today</span>
+  }
+  return null
+}
+
 // ── Card value ────────────────────────────────────────────────
 function MetricCardVal({ m, log, medLogs, medications }) {
   if (!log && m !== 'medication') return <span className="hc-empty">Not logged</span>
@@ -749,16 +794,32 @@ export default function Health({ userId }) {
     return { dateStr:ds, log:history.find(l=>l.log_date===ds), isToday:i===0 }
   }).reverse()
 
+  // Derive save time from todayLog
+  const savedAtStr = (() => {
+    if (!todayLog?.updated_at && !todayLog?.created_at) return null
+    const d = new Date(todayLog.updated_at || todayLog.created_at)
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+  })()
+
+  const loggedInStrip = strip.filter(s => s.log).length
+  const stripPct = Math.round((loggedInStrip / 7) * 100)
+
   return (
     <div className="health-page">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Health</h1>
-          <p className="page-sub">Optional daily check-in. Your data, your pace.</p>
+      {/* Header */}
+      <div className="health-hero">
+        <div className="health-hero-left">
+          <p className="health-hero-sub">Optional daily check-in. Your data, your pace.</p>
+          <h1 className="health-hero-q">How are you today?</h1>
         </div>
-        <button className="btn-primary" onClick={() => setShowModal(true)}>
-          {todayLog ? 'Update today' : '+ Log today'}
-        </button>
+        <div className="health-hero-status">
+          {todayLog
+            ? <span className="health-saved-badge">✓ Saved{savedAtStr ? ` · ${savedAtStr}` : ''}</span>
+            : <span className="health-unsaved-badge">Not logged today</span>}
+          <button className="btn-primary btn-sm" onClick={() => setShowModal(true)}>
+            {todayLog ? 'Update today' : '+ Log today'}
+          </button>
+        </div>
       </div>
 
       {/* Water tracker */}
@@ -775,18 +836,23 @@ export default function Health({ userId }) {
             <div className="hc-val">
               <MetricCardVal m={m} log={todayLog} medLogs={todayMedLogs} medications={medications} />
             </div>
+            <MetricCardSub m={m} log={todayLog} />
           </div>
         ))}
       </div>
 
       {/* 7-day strip */}
-      <div className="health-section-title">Last 7 days</div>
+      <div className="health-strip-header">
+        <span className="health-section-title" style={{marginBottom:0}}>Last 7 days</span>
+        <span className="health-strip-summary">{loggedInStrip} of 7 logged · {stripPct}%</span>
+      </div>
       <div className="health-strip">
         {strip.map(({ dateStr, log, isToday }) => (
           <div key={dateStr} className={`hs-day${isToday?' hs-today':''}${log?' hs-logged':''}`}>
             <div className="hs-date">
               {isToday ? 'Today' : new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'short'})}
             </div>
+            <div className="hs-num">{new Date(dateStr+'T12:00:00').getDate()}</div>
             <div className="hs-dots">
               {enabledMetrics.slice(0,5).filter(m => METRICS[m]).map(m => (
                 <div key={m} className="hs-dot"

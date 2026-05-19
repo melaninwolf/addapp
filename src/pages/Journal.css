@@ -666,119 +666,155 @@
 }
 
 /* ── Year at a Glance ─────────────────────────────────────────── */
+/* ── Year at a Glance ──────────────────────────────────────────── */
 .year-glance {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  height: 100%;
+  gap: 20px;
+  padding: 20px 20px 32px;
 }
-.year-nav {
+
+/* Header row */
+.yg-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px 0;
-  flex-shrink: 0;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.yg-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.yg-headline {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.4px;
+}
+.yg-entry-count {
+  font-size: 13px;
+  color: var(--text3);
+  font-weight: 500;
+}
+.yg-year-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .year-nav-label {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--text);
   letter-spacing: -0.5px;
   font-family: var(--mono);
-  min-width: 60px;
+  min-width: 52px;
   text-align: center;
 }
 
-/* 12-column horizontal scroll grid */
-.yg-grid {
+/* 4 × 3 month grid */
+.yg-months-grid {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 1px;
-  overflow-x: auto;
-  flex: 1;
-  background: var(--border);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  min-width: 0;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
-/* Each month column */
-.yg-month {
+/* Each mini-calendar */
+.yg-mini-month {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  min-width: 78px;
+  gap: 6px;
 }
-.yg-month-header {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-  text-align: center;
-  padding: 8px 4px 6px;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-/* Each day row */
-.yg-day {
+.yg-mini-header {
   display: flex;
   align-items: center;
-  gap: 0;
-  padding: 0 6px;
-  height: 22px;
-  width: 100%;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.1s;
-  text-align: left;
+  justify-content: space-between;
 }
-.yg-day:last-child { border-bottom: none; }
-.yg-day:hover:not(:disabled) { background: var(--accent-glow); }
-.yg-day:disabled { cursor: default; }
-
-.yg-dow {
-  font-size: 9px;
-  font-weight: 600;
+.yg-mini-name {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.yg-mini-count {
+  font-size: 10px;
+  font-weight: 700;
   color: var(--text3);
-  width: 20px;
-  flex-shrink: 0;
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+
+/* Day-of-week header */
+.yg-dow-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.yg-dow-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text3);
+  text-align: center;
   letter-spacing: 0.02em;
 }
-.yg-date {
-  font-size: 11px;
+
+/* Calendar day grid */
+.yg-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.yg-cal-empty {
+  aspect-ratio: 1;
+}
+.yg-cal-day {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 4px;
+  background: var(--bg2);
+  color: var(--text3);
+  font-size: 9px;
   font-weight: 500;
-  color: var(--text2);
-  flex: 1;
-  text-align: right;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, transform 0.1s;
+  font-family: inherit;
+  padding: 0;
 }
-
-/* Weekend tints */
-.yg-day.yg-sat {
-  background: rgba(99, 102, 241, 0.08);
+.yg-cal-day:hover:not(:disabled) {
+  background: var(--accent-glow);
+  color: var(--accent);
+  transform: scale(1.15);
 }
-.yg-day.yg-sat .yg-dow,
-.yg-day.yg-sat .yg-date { color: #818cf8; }
-
-.yg-day.yg-sun {
-  background: rgba(244, 114, 182, 0.08);
+.yg-cal-day:disabled {
+  cursor: default;
+  opacity: 0.3;
 }
-.yg-day.yg-sun .yg-dow,
-.yg-day.yg-sun .yg-date { color: #f472b6; }
-
+/* Has a journal entry */
+.yg-cal-day.yg-logged {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
 /* Today */
-.yg-day.yg-today {
+.yg-cal-day.yg-cal-today {
   background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 800;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
 }
-.yg-day.yg-today .yg-dow,
-.yg-day.yg-today .yg-date { color: #fff !important; font-weight: 800; }
+/* Future days */
+.yg-cal-day.yg-future {
+  opacity: 0.25;
+}
 
 
 /* ── Daily → monthly shortcut button ─────────────────────────── */

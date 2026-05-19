@@ -717,43 +717,77 @@ function WeeklyView({ weekStart, userId }) {
 }
 
 // ── Year at a Glance ──────────────────────────────────────────
-function YearAtAGlance({ year, onYearChange, onSelectDate }) {
-  const today = todayStr()
-  const DOW_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+function YearAtAGlance({ year, onYearChange, onSelectDate, loggedDates = new Set() }) {
+  const today    = todayStr()
+  const DOW_HDR  = ['S','M','T','W','T','F','S']
+
+  const yearEntries = [...loggedDates].filter(d => d.startsWith(`${year}-`)).length
 
   return (
     <div className="year-glance">
-      {/* Year nav */}
-      <div className="year-nav">
-        <button className="cal-nav-btn" onClick={() => onYearChange(year - 1)}>‹</button>
-        <span className="year-nav-label">{year}</span>
-        <button className="cal-nav-btn" onClick={() => onYearChange(year + 1)}>›</button>
+      {/* Header */}
+      <div className="yg-header">
+        <div className="yg-header-left">
+          <span className="yg-headline">Every day, all at once</span>
+          <span className="yg-entry-count">{year} · {yearEntries} {yearEntries === 1 ? 'entry' : 'entries'}</span>
+        </div>
+        <div className="yg-year-nav">
+          <button className="cal-nav-btn" onClick={() => onYearChange(year - 1)}>‹</button>
+          <span className="year-nav-label">{year}</span>
+          <button className="cal-nav-btn" onClick={() => onYearChange(year + 1)}>›</button>
+        </div>
       </div>
 
-      {/* 12-month grid */}
-      <div className="yg-grid">
+      {/* 4 × 3 mini-calendar heatmap */}
+      <div className="yg-months-grid">
         {MONTH_NAMES.map((monthName, mi) => {
-          const m       = mi + 1
-          const numDays = daysInMonth(year, mi)
+          const m           = mi + 1
+          const numDays     = daysInMonth(year, mi)
+          const firstDow    = new Date(year, mi, 1).getDay()   // 0 = Sun
+          const monthPrefix = `${year}-${String(m).padStart(2,'0')}-`
+          const monthCount  = [...loggedDates].filter(d => d.startsWith(monthPrefix)).length
+
           return (
-            <div key={mi} className="yg-month">
-              <div className="yg-month-header">{monthName.slice(0, 3).toUpperCase()}</div>
-              {Array.from({ length: numDays }, (_, i) => {
-                const d   = i + 1
-                const ds  = `${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-                const dow = new Date(year, mi, d).getDay()  // 0=Sun, 6=Sat
-                const isSat   = dow === 6
-                const isSun   = dow === 0
-                const isToday = ds === today
-                return (
-                  <button key={d}
-                    className={`yg-day${isSat ? ' yg-sat' : ''}${isSun ? ' yg-sun' : ''}${isToday ? ' yg-today' : ''}`}
-                    onClick={() => onSelectDate(ds)}>
-                    <span className="yg-dow">{DOW_LABELS[dow]}</span>
-                    <span className="yg-date">{d}</span>
-                  </button>
-                )
-              })}
+            <div key={mi} className="yg-mini-month">
+              <div className="yg-mini-header">
+                <span className="yg-mini-name">{monthName.slice(0,3).toUpperCase()}</span>
+                {monthCount > 0 && <span className="yg-mini-count">{monthCount}</span>}
+              </div>
+
+              {/* Su Mo Tu We Th Fr Sa */}
+              <div className="yg-dow-row">
+                {DOW_HDR.map((l, i) => <span key={i} className="yg-dow-label">{l}</span>)}
+              </div>
+
+              {/* Day grid */}
+              <div className="yg-cal-grid">
+                {/* Empty cells before month starts */}
+                {Array.from({ length: firstDow }, (_, i) => (
+                  <div key={`e${i}`} className="yg-cal-empty" />
+                ))}
+                {Array.from({ length: numDays }, (_, i) => {
+                  const d        = i + 1
+                  const ds       = `${monthPrefix}${String(d).padStart(2,'0')}`
+                  const isLogged = loggedDates.has(ds)
+                  const isToday  = ds === today
+                  const isFuture = ds > today
+                  return (
+                    <button key={d}
+                      className={[
+                        'yg-cal-day',
+                        isLogged  && 'yg-logged',
+                        isToday   && 'yg-cal-today',
+                        isFuture  && 'yg-future',
+                      ].filter(Boolean).join(' ')}
+                      onClick={() => !isFuture && onSelectDate(ds)}
+                      disabled={isFuture}
+                      title={ds}
+                    >
+                      {d}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )
         })}
@@ -1281,7 +1315,7 @@ export default function Journal({ userId }) {
           {view === 'weekly'    && <WeeklyView weekStart={weekStart} userId={userId} />}
           {view === 'monthly'   && <MonthlyPage month={monthlyMonth} onMonthChange={setMonthlyMonth} subView={monthlySubView} onSubViewChange={setMonthlySubView} userId={userId} />}
           {view === 'quarterly' && <StubView title="Quarterly Planner" icon="🔷" />}
-          {view === 'yearly'    && <YearAtAGlance year={yearlyYear} onYearChange={setYearlyYear} onSelectDate={openDaily} />}
+          {view === 'yearly'    && <YearAtAGlance year={yearlyYear} onYearChange={setYearlyYear} onSelectDate={openDaily} loggedDates={loggedDates} />}
         </div>
       </div>
     </div>

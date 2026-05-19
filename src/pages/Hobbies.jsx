@@ -592,11 +592,70 @@ function HobbyDetail({ hobby, userId, onHobbyUpdate, onDelete }) {
 }
 
 // ─── Main Hobbies page ─────────────────────────────────────────────────────
+// ─── Growing Stages Chart ───────────────────────────────────────────────────
+const STAGE_MINUTES = [
+  { label: 'SEED',    sub: '< 10 min',  mins: 5   },
+  { label: 'SAPLING', sub: '10–60 min', mins: 30  },
+  { label: 'GROWING', sub: '1–5 hours', mins: 120 },
+  { label: 'MATURE',  sub: '5+ hours',  mins: 360 },
+]
+
+function GrowingStagesChart({ onClose }) {
+  const species = Object.entries(TREE_TYPES)
+  return (
+    <div className="stages-overlay" onClick={onClose}>
+      <div className="stages-sheet" onClick={e => e.stopPropagation()}>
+        <div className="stages-header">
+          <div className="stages-header-text">
+            <h2 className="stages-title">Growing stages</h2>
+            <p className="stages-sub">Same species, four ages. Every tree earns its silhouette.</p>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="stages-grid">
+          {/* Column headers */}
+          <div className="stages-col-label" />
+          {STAGE_MINUTES.map(s => (
+            <div key={s.label} className="stages-col-header">
+              <span className="stages-col-name">{s.label}</span>
+              <span className="stages-col-sub">{s.sub}</span>
+            </div>
+          ))}
+
+          {/* One row per species */}
+          {species.map(([key, cfg]) => (
+            <>
+              <div key={`row-${key}`} className="stages-row-label">
+                <span className="stages-species-emoji">{cfg.emoji}</span>
+                <span className="stages-species-name">{cfg.label}</span>
+              </div>
+              {STAGE_MINUTES.map(stage => (
+                <div key={`${key}-${stage.label}`} className="stages-cell">
+                  <HobbyTree
+                    hobby={{ tree_type: key, total_minutes: stage.mins, id: `${key}-${stage.label}` }}
+                    size="mini"
+                  />
+                </div>
+              ))}
+            </>
+          ))}
+        </div>
+
+        <div className="stages-footer">
+          Seeds get a per-species sprout · Sapling: 45% scale · Growing: 82% scale · Mature: full canopy
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Hobbies({ userId }) {
-  const [hobbies,      setHobbies]      = useState([])
-  const [selected,     setSelected]     = useState(null)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [loading,      setLoading]      = useState(true)
+  const [hobbies,       setHobbies]       = useState([])
+  const [selected,      setSelected]      = useState(null)
+  const [showAddModal,  setShowAddModal]  = useState(false)
+  const [showStages,    setShowStages]    = useState(false)
+  const [loading,       setLoading]       = useState(true)
 
   useEffect(() => {
     if (!userId) return
@@ -674,6 +733,9 @@ export default function Hobbies({ userId }) {
         <button className="hsb-add-full" onClick={() => setShowAddModal(true)}>
           + New hobby
         </button>
+        <button className="hsb-stages-btn" onClick={() => setShowStages(true)}>
+          📊 Growing stages
+        </button>
       </aside>
 
       {/* ── Main ── */}
@@ -701,6 +763,7 @@ export default function Hobbies({ userId }) {
       {showAddModal && (
         <AddHobbyModal userId={userId} onClose={() => setShowAddModal(false)} onAdd={handleAdd} />
       )}
+      {showStages && <GrowingStagesChart onClose={() => setShowStages(false)} />}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { LocalNotifications } from '@capacitor/local-notifications'
 import { addMAM, MAM_ROUTINE, MAM_TRIGGER } from '../xp'
 import { supabase } from '../supabase'
 import EmojiPicker from '../components/EmojiPicker'
@@ -277,9 +278,11 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   useEffect(() => { pausedRef.current = paused }, [paused])
 
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
+    LocalNotifications.checkPermissions().then(permission => {
+      if (permission.display !== 'granted') {
+        LocalNotifications.requestPermissions()
+      }
+    })
   }, [])
 
   useEffect(() => {
@@ -446,32 +449,58 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
 
   function resetTimer() { setElapsed(0) }
 
-  function fireStepNotif(currentName, nextName) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return
+  async function fireStepNotif(currentName, nextName) {
     try {
-      new Notification(`${currentName} is done`, {
-        body: `Next: ${nextName}`,
-        tag: 'addapp-step',
-        renotify: true,
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: `${currentName} is done`,
+            body: `Next: ${nextName}`,
+            id: 2,
+            schedule: { at: new Date(Date.now() + 100) },
+          }
+        ]
       })
-    } catch(e) {}
-  }
-
-  function fireNotif(xp) {
-    if (!('Notification' in window)) return
-    const send = () => {
+    } catch (e) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return
       try {
-        new Notification(`${routine.name} complete! 🎉`, {
-          body: `You earned +${xp} XP. Tap to see your breakdown.`,
-          requireInteraction: true,
-          tag: 'addapp-routine-complete',
+        new Notification(`${currentName} is done`, {
+          body: `Next: ${nextName}`,
+          tag: 'addapp-step',
           renotify: true,
         })
-      } catch(e) { console.log('Notification error:', e) }
+      } catch(e) {}
     }
-    if (Notification.permission === 'granted') send()
-    else if (Notification.permission === 'default') {
-      Notification.requestPermission().then(p => { if (p === 'granted') send() })
+  }
+
+  async function fireNotif(xp) {
+    try {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: `${routine.name} complete! 🎉`,
+            body: `You earned +${xp} XP. Tap to see your breakdown.`,
+            id: 3,
+            schedule: { at: new Date(Date.now() + 100) },
+          }
+        ]
+      })
+    } catch (e) {
+      if (!('Notification' in window)) return
+      const send = () => {
+        try {
+          new Notification(`${routine.name} complete! 🎉`, {
+            body: `You earned +${xp} XP. Tap to see your breakdown.`,
+            requireInteraction: true,
+            tag: 'addapp-routine-complete',
+            renotify: true,
+          })
+        } catch(e) { console.log('Notification error:', e) }
+      }
+      if (Notification.permission === 'granted') send()
+      else if (Notification.permission === 'default') {
+        Notification.requestPermission().then(p => { if (p === 'granted') send() })
+      }
     }
   }
 
@@ -680,28 +709,42 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       <div style={{textAlign:'center', marginBottom:'0.75rem'}}>
         <button
           className="btn-ghost-sm"
-          onClick={() => {
+          onClick={async () => {
             playSound('step')
             const nextStep = queue[stepIdx + 1]
-            if ('Notification' in window) {
-              if (Notification.permission === 'granted') {
-                try {
-                  new Notification('Test: Step done', {
+            try {
+              await LocalNotifications.schedule({
+                notifications: [
+                  {
+                    title: 'Test: Step done',
                     body: nextStep ? `Next: ${nextStep.name}` : 'Last step!',
-                    tag: 'addapp-test',
-                    renotify: true,
+                    id: 99,
+                    schedule: { at: new Date(Date.now() + 100) },
+                  }
+                ]
+              })
+              showToast('Test notification sent!')
+            } catch (e) {
+              if ('Notification' in window) {
+                if (Notification.permission === 'granted') {
+                  try {
+                    new Notification('Test: Step done', {
+                      body: nextStep ? `Next: ${nextStep.name}` : 'Last step!',
+                      tag: 'addapp-test',
+                      renotify: true,
+                    })
+                    showToast('Test notification sent!')
+                  } catch(e) { showToast('Notification failed: ' + e.message) }
+                } else if (Notification.permission === 'default') {
+                  Notification.requestPermission().then(p => {
+                    showToast(p === 'granted' ? 'Permission granted! Try again.' : 'Notifications blocked.')
                   })
-                  showToast('Test notification sent!')
-                } catch(e) { showToast('Notification failed: ' + e.message) }
-              } else if (Notification.permission === 'default') {
-                Notification.requestPermission().then(p => {
-                  showToast(p === 'granted' ? 'Permission granted! Try again.' : 'Notifications blocked.')
-                })
+                } else {
+                  showToast('Notifications are blocked. Enable in browser settings.')
+                }
               } else {
-                showToast('Notifications are blocked. Enable in browser settings.')
+                showToast('Notifications not supported in this browser.')
               }
-            } else {
-              showToast('Notifications not supported in this browser.')
             }
           }}
         >🔔 Test notification</button>

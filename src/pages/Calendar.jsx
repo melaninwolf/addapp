@@ -316,94 +316,277 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
 }
 
 // ─── WEEK VIEW ────────────────────────────────────────────────
+// ─── Week-view time grid helpers ─────────────────────────────
+const WV_START = 6    // 6 AM
+const WV_END   = 22   // 10 PM
+const WV_HOURS = WV_END - WV_START          // 16 visible hours
+const WV_PX    = 56                          // px per hour
+
+function timeStrToMins(t) {
+  if (!t) return null
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minsToTop(mins) {
+  return ((mins / 60) - WV_START) * WV_PX
+}
+
+function minsToHeight(durationMins) {
+  return Math.max(durationMins * (WV_PX / 60), 22)
+}
+
+function gcalTimeToMins(e) {
+  if (!e.start?.dateTime) return null
+  const d = new Date(e.start.dateTime)
+  return d.getHours() * 60 + d.getMinutes()
+}
+function gcalDurationMins(e) {
+  if (!e.start?.dateTime || !e.end?.dateTime) return 60
+  return (new Date(e.end.dateTime) - new Date(e.start.dateTime)) / 60000
+}
+
+const WEEK_FILTERS = [
+  { key: 'routines', label: 'Routines', emoji: '🔄' },
+  { key: 'focus',    label: 'Focus',    emoji: '🎯' },
+  { key: 'tasks',    label: 'Tasks',    emoji: '✅' },
+  { key: 'events',   label: 'Events',   emoji: '📅' },
+]
+
 function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onEditLog }) {
-  const [anchor, setAnchor] = useState(() => new Date(selected))
+  const [anchor,  setAnchor]  = useState(() => new Date(selected))
+  const [filters, setFilters] = useState(new Set(['routines', 'focus', 'tasks', 'events']))
   const weekDays = getWeekDays(anchor)
 
   function prev() { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d) }
   function next() { const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d) }
 
+  function toggleFilter(key) {
+    setFilters(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  // Stats for today
+  const todayRoutines = routinesForDate(today).length
+  const todayTasks    = tasksForDate(today).length
+  const todayEvents   = [...customEventsForDate(today), ...gcalEventsForDate(today)].length
+  const totalItems    = todayRoutines + todayTasks + todayEvents
+
+  const hours = Array.from({ length: WV_HOURS }, (_, i) => WV_START + i)
+
   return (
     <div className="cal-week-layout">
-      <CalNav onPrev={prev} onNext={next} label={weekRangeLabel(weekDays)} />
-
-      <div className="week-grid">
-        {weekDays.map((date, i) => {
-          const isToday    = isSameDay(date, today)
-          const isSelected = isSameDay(date, selected)
-          const dayRout    = routinesForDate(date)
-          const dayGCal    = gcalEventsForDate(date)
-          const dayCustom  = customEventsForDate(date)
-          const dayTasks   = tasksForDate(date)
-          return (
-            <div
-              key={i}
-              className={['week-col', isToday && 'week-col-today', isSelected && 'week-col-selected'].filter(Boolean).join(' ')}
-              onClick={() => setSelected(date)}
+      {/* Nav + filters bar */}
+      <div className="wv-top-bar">
+        <div className="wv-nav-row">
+          <CalNav onPrev={prev} onNext={next} label={weekRangeLabel(weekDays)} />
+          <div className="wv-stats">
+            {totalItems > 0
+              ? <span>{totalItems} items today · {todayRoutines} routine{todayRoutines !== 1 ? 's' : ''}</span>
+              : <span className="wv-stats-empty">Nothing scheduled today</span>}
+          </div>
+        </div>
+        <div className="wv-filter-pills">
+          {WEEK_FILTERS.map(f => (
+            <button
+              key={f.key}
+              className={`wv-pill${filters.has(f.key) ? ' wv-pill-on' : ''}`}
+              onClick={() => toggleFilter(f.key)}
             >
-              <div className="week-col-head">
-                <span className="week-col-dow">{DOW_SHORT[date.getDay()]}</span>
-                <span className={`week-col-num${isToday ? ' today-bubble' : ''}`}>
-                  {date.getDate()}
-                </span>
+              {f.emoji} {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Time grid */}
+      <div className="wv-scroll">
+        <div className="wv-grid-wrap">
+          {/* Time gutter */}
+          <div className="wv-gutter">
+            {hours.map(h => (
+              <div key={h} className="wv-hour-label">
+                {h === 12 ? '12pm' : h > 12 ? `${h-12}pm` : `${h}am`}
               </div>
-              <div className="week-col-body">
-                {dayTasks.map(t => (
-                  <div key={`task-${t.id}`} className="week-event"
-                    style={{
-                      borderLeft: `2px solid ${t._catColor || 'var(--green)'}`,
-                      background: t._catColor ? t._catColor + '18' : 'var(--green-bg)',
-                      opacity: t._done ? 0.5 : 1,
-                    }}>
-                    <span className="we-emoji">✅</span>
-                    <div className="we-body">
-                      <div className="we-name" style={{ textDecoration: t._done ? 'line-through' : 'none' }}>{t.title}</div>
-                      {t.start_time && <div className="we-time">{fmtTime(t.start_time)}</div>}
-                    </div>
-                  </div>
-                ))}
-                {dayCustom.map(e => (
-                  <div key={e.id} className="week-event"
-                    style={{ borderLeft: `2px solid ${TYPE_BORDER[e.type] || 'var(--accent)'}`, background: TYPE_BG[e.type] }}>
-                    <span className="we-emoji">{e.emoji}</span>
-                    <div className="we-body">
-                      <div className="we-name">{e.title}</div>
-                      {e.start_time && <div className="we-time">{fmtTime(e.start_time)}</div>}
-                    </div>
-                  </div>
-                ))}
-                {dayGCal.map(e => (
-                  <div key={e.id} className="week-event week-event-gcal">
-                    <span className="we-emoji">📅</span>
-                    <div className="we-body">
-                      <div className="we-name">{e.summary || '(No title)'}</div>
-                      <div className="we-time gcal-time">{eventTimeLabel(e)}</div>
-                    </div>
-                  </div>
-                ))}
-                {dayRout.map(r => (
-                  <div key={r.id} className={`week-event${r._logStatus ? ' we-done' : ''}`}>
-                    <span className="we-emoji">{r.emoji}</span>
-                    <div className="we-body">
-                      <div className="we-name">{r.name}</div>
-                      <div className="we-time">
-                        {r._actualStart
-                          ? <>{r._actualStart}{r._actualEnd ? `–${r._actualEnd}` : ''}</>
-                          : fmtTime(r.time)
-                        }
-                        {r._logStatus && ' ✓'}
+            ))}
+          </div>
+
+          {/* Day columns */}
+          {weekDays.map((date, i) => {
+            const isToday    = isSameDay(date, today)
+            const isSelected = isSameDay(date, selected)
+            const dayRout    = filters.has('routines') ? routinesForDate(date)    : []
+            const dayGCal    = filters.has('events')   ? gcalEventsForDate(date)  : []
+            const dayCustom  = filters.has('events')   ? customEventsForDate(date): []
+            const dayTasks   = filters.has('tasks')    ? tasksForDate(date)       : []
+
+            // Partition into timed vs all-day
+            const timedRout   = dayRout.filter(r => r.time || r._actualStart)
+            const timedCustom = dayCustom.filter(e => e.start_time)
+            const timedGCal   = dayGCal.filter(e => e.start?.dateTime)
+            const timedTasks  = dayTasks.filter(t => t.start_time)
+            const allDayItems = [
+              ...dayRout.filter(r => !r.time && !r._actualStart),
+              ...dayCustom.filter(e => !e.start_time),
+              ...dayGCal.filter(e => !e.start?.dateTime),
+              ...dayTasks.filter(t => !t.start_time),
+            ]
+
+            return (
+              <div
+                key={i}
+                className={['wv-col', isToday && 'wv-col-today', isSelected && 'wv-col-selected'].filter(Boolean).join(' ')}
+                onClick={() => setSelected(date)}
+              >
+                {/* Day header */}
+                <div className="wv-col-head">
+                  <span className="wv-col-dow">{DOW_SHORT[date.getDay()]}</span>
+                  <span className={`wv-col-num${isToday ? ' wv-today-bubble' : ''}`}>
+                    {date.getDate()}
+                  </span>
+                </div>
+
+                {/* All-day area */}
+                {allDayItems.length > 0 && (
+                  <div className="wv-allday">
+                    {allDayItems.slice(0, 2).map((item, j) => (
+                      <div key={j} className="wv-allday-chip">
+                        {item.emoji || (item.summary ? '📅' : '✅')} {item.name || item.title || item.summary || '—'}
                       </div>
-                    </div>
-                    {r._logId && (
-                      <button className="cal-log-edit-btn" onClick={e => { e.stopPropagation(); onEditLog && onEditLog(r) }} title="Edit session times">✏️</button>
+                    ))}
+                    {allDayItems.length > 2 && (
+                      <div className="wv-allday-chip wv-allday-more">+{allDayItems.length - 2}</div>
                     )}
                   </div>
-                ))}
-                {dayRout.length === 0 && dayGCal.length === 0 && dayCustom.length === 0 && dayTasks.length === 0 && <div className="week-no-rout" />}
+                )}
+
+                {/* Timed grid */}
+                <div className="wv-timed" style={{ height: WV_HOURS * WV_PX }}>
+                  {/* Hour lines */}
+                  {hours.map(h => (
+                    <div key={h} className="wv-hour-line" style={{ top: (h - WV_START) * WV_PX }} />
+                  ))}
+
+                  {/* Current time indicator (today only) */}
+                  {isToday && (() => {
+                    const now = new Date()
+                    const nowMins = now.getHours() * 60 + now.getMinutes()
+                    const top = minsToTop(nowMins)
+                    if (top >= 0 && top <= WV_HOURS * WV_PX) {
+                      return (
+                        <div className="wv-now-line" style={{ top }}>
+                          <div className="wv-now-dot" />
+                        </div>
+                      )
+                    }
+                    return null
+                  })()}
+
+                  {/* Routine blocks */}
+                  {timedRout.map(r => {
+                    const startMins = timeStrToMins(r._actualStart || r.time)
+                    if (startMins == null) return null
+                    const dur = r._actualEnd
+                      ? (timeStrToMins(r._actualEnd) - startMins)
+                      : (r.steps?.reduce((a, s) => a + (s.dur || 0), 0) || 30)
+                    const top = minsToTop(startMins)
+                    if (top < -20 || top > WV_HOURS * WV_PX + 20) return null
+                    return (
+                      <div key={r.id}
+                        className={`wv-block wv-block-routine${r._logStatus ? ' wv-done' : ''}`}
+                        style={{ top, height: minsToHeight(dur) }}
+                        onClick={ev => ev.stopPropagation()}>
+                        <span className="wvb-emoji">{r.emoji}</span>
+                        <div className="wvb-body">
+                          <div className="wvb-name">{r.name}</div>
+                          {dur >= 30 && <div className="wvb-time">{r._actualStart || fmtTime(r.time)}</div>}
+                        </div>
+                        {r._logId && (
+                          <button className="wvb-edit" onClick={ev => { ev.stopPropagation(); onEditLog && onEditLog(r) }}>✏️</button>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Custom event blocks */}
+                  {timedCustom.map(e => {
+                    const startMins = timeStrToMins(e.start_time)
+                    if (startMins == null) return null
+                    const endMins = timeStrToMins(e.end_time)
+                    const dur = endMins ? endMins - startMins : 60
+                    const top = minsToTop(startMins)
+                    if (top < -20 || top > WV_HOURS * WV_PX + 20) return null
+                    return (
+                      <div key={e.id}
+                        className="wv-block"
+                        style={{
+                          top,
+                          height: minsToHeight(dur),
+                          borderLeft: `3px solid ${TYPE_BORDER[e.type] || 'var(--accent)'}`,
+                          background: TYPE_BG[e.type] || 'var(--accent-glow)',
+                        }}
+                        onClick={ev => ev.stopPropagation()}>
+                        <span className="wvb-emoji">{e.emoji}</span>
+                        <div className="wvb-body">
+                          <div className="wvb-name">{e.title}</div>
+                          {dur >= 30 && <div className="wvb-time">{fmtTime(e.start_time)}</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* GCal event blocks */}
+                  {timedGCal.map(e => {
+                    const startMins = gcalTimeToMins(e)
+                    if (startMins == null) return null
+                    const dur = gcalDurationMins(e)
+                    const top = minsToTop(startMins)
+                    if (top < -20 || top > WV_HOURS * WV_PX + 20) return null
+                    return (
+                      <div key={e.id}
+                        className="wv-block wv-block-gcal"
+                        style={{ top, height: minsToHeight(dur) }}
+                        onClick={ev => ev.stopPropagation()}>
+                        <span className="wvb-emoji">📅</span>
+                        <div className="wvb-body">
+                          <div className="wvb-name">{e.summary || '(No title)'}</div>
+                          {dur >= 30 && <div className="wvb-time">{eventTimeLabel(e)}</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Task blocks */}
+                  {timedTasks.map(t => {
+                    const startMins = timeStrToMins(t.start_time)
+                    if (startMins == null) return null
+                    const top = minsToTop(startMins)
+                    if (top < -20 || top > WV_HOURS * WV_PX + 20) return null
+                    return (
+                      <div key={t.id}
+                        className={`wv-block wv-block-task${t._done ? ' wv-done' : ''}`}
+                        style={{
+                          top, height: minsToHeight(30),
+                          borderLeft: `3px solid ${t._catColor || 'var(--green)'}`,
+                          background: t._catColor ? t._catColor + '18' : 'var(--green-bg)',
+                          opacity: t._done ? 0.55 : 1,
+                        }}
+                        onClick={ev => ev.stopPropagation()}>
+                        <span className="wvb-emoji">✅</span>
+                        <div className="wvb-body">
+                          <div className="wvb-name" style={{ textDecoration: t._done ? 'line-through' : 'none' }}>{t.title}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )

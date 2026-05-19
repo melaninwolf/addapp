@@ -1039,6 +1039,318 @@
   background: var(--accent);
 }
 
+/* ── WEEK VIEW (TIME-GRID) ────────────────────────────────── */
+
+/* Top bar: nav + stats + filter pills */
+.wv-top-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wv-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wv-stats {
+  font-size: 12px;
+  color: var(--text2);
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.wv-stats-sep { color: var(--border2); }
+.wv-stats-empty { color: var(--text3); }
+
+.wv-filter-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wv-pill {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.wv-pill:hover { border-color: var(--border2); color: var(--text); }
+.wv-pill-on {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+/* Scrollable viewport */
+.wv-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 240px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg2);
+}
+
+/* Grid: gutter + 7 columns */
+.wv-grid-wrap {
+  display: grid;
+  grid-template-columns: 48px repeat(7, minmax(90px, 1fr));
+  min-width: 680px;
+}
+
+/* Hour-label gutter */
+.wv-gutter {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* spacer = approx col-head height so labels align with timed area */
+.wv-gutter::before {
+  content: '';
+  display: block;
+  height: 54px;
+  flex-shrink: 0;
+}
+
+.wv-hour-label {
+  height: 56px;         /* matches WV_PX */
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text3);
+  font-family: var(--mono);
+  transform: translateY(-6px); /* shift up so label sits at the hour line */
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Day column */
+.wv-col {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.wv-col:first-of-type { border-left: none; }
+.wv-col-today  { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.wv-col-selected { background: var(--accent-glow); }
+
+/* Column header (DOW + date number) */
+.wv-col-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+  z-index: 5;
+}
+.wv-col-today .wv-col-head  { background: color-mix(in srgb, var(--accent) 6%, var(--bg2)); }
+.wv-col-selected .wv-col-head { background: var(--accent-glow); }
+
+.wv-col-dow {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wv-col-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wv-today-bubble {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* All-day chips row */
+.wv-allday {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 4px 5px;
+  min-height: 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.wv-allday-chip {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.wv-allday-more {
+  background: var(--bg3);
+  color: var(--text3);
+}
+
+/* Timed area (position:relative, height set inline) */
+.wv-timed {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* Hour grid lines */
+.wv-hour-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+
+/* Current-time indicator */
+.wv-now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  z-index: 8;
+}
+.wv-now-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+.wv-now-line::after {
+  content: '';
+  flex: 1;
+  height: 1.5px;
+  background: var(--accent);
+}
+
+/* ── WV event blocks ──────────────────────────────────────── */
+.wv-block {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border-radius: 6px;
+  padding: 3px 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: filter 0.15s, opacity 0.15s;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  z-index: 2;
+}
+.wv-block:hover { filter: brightness(1.08); }
+
+/* Routine block */
+.wv-block-routine {
+  background: var(--bg3);
+  border-color: var(--border2);
+  border-left: 3px solid var(--accent);
+}
+
+/* Google Calendar block */
+.wv-block-gcal {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  border-left: 3px solid var(--accent);
+}
+
+/* Task block — colors applied inline via style */
+.wv-block-task {
+  border-left-width: 3px;
+}
+
+/* Completed / done state */
+.wv-done {
+  opacity: 0.6;
+  filter: grayscale(0.25);
+}
+
+/* Block inner elements */
+.wvb-emoji {
+  font-size: 11px;
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+
+.wvb-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.wvb-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.wvb-time {
+  font-size: 9px;
+  color: var(--text3);
+  font-family: var(--mono);
+  margin-top: 1px;
+}
+
+.wvb-edit {
+  flex-shrink: 0;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1;
+  align-self: flex-start;
+}
+.wv-block:hover .wvb-edit { opacity: 1; }
+
 /* ── RESPONSIVE ───────────────────────────────────────────── */
 @media (max-width: 760px) {
   .cal-month-layout {
