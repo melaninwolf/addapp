@@ -258,6 +258,7 @@ export default function Projects({ userId }) {
   const [sortDir,         setSortDir]        = useState('desc')
   const [showModal,       setShowModal]      = useState(false)
   const [editingProject,  setEditingProject] = useState(null)
+  const [search,          setSearch]         = useState('')
 
   useEffect(() => {
     if (!userId) { setLoading(false); return }
@@ -285,7 +286,7 @@ export default function Projects({ userId }) {
       setTaskCounts(counts)
       setTriggers(trigRes.data || [])
       setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [userId])
 
   function changeView(v) {
@@ -340,7 +341,6 @@ export default function Projects({ userId }) {
   )
 
   const activeCount   = projects.filter(p => p.status === 'active').length
-  const [search, setSearch] = useState('')
   const searchedDisplayed = displayed.filter(p =>
     !search.trim() || p.name.toLowerCase().includes(search.toLowerCase())
   )
