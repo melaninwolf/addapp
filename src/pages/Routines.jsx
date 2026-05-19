@@ -6,6 +6,68 @@ import { supabase } from '../supabase'
 import EmojiPicker from '../components/EmojiPicker'
 import './Routines.css'
 
+// ── Touch-aware drag-sort hook (web + Android/Capacitor) ─────────────────────
+// HTML5 DnD fires only on desktop. Touch events fire only on mobile.
+// This hook handles both via a shared ref strategy.
+// Non-passive touchmove must be added imperatively (React can't set passive:false).
+function useListDrag(onMove) {
+  const [dragIdx,     setDragIdx]     = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
+  const dragRef  = useRef(null)
+  const overRef  = useRef(null)
+  const listRef  = useRef(null)
+
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    function onTouchMove(e) {
+      if (dragRef.current === null) return
+      e.preventDefault() // blocks page scroll during drag
+      const { clientY } = e.touches[0]
+      for (const row of el.querySelectorAll('[data-di]')) {
+        const rect = row.getBoundingClientRect()
+        if (clientY >= rect.top && clientY <= rect.bottom) {
+          const idx = parseInt(row.dataset.di)
+          if (idx !== overRef.current) {
+            overRef.current = idx
+            setDragOverIdx(idx)
+          }
+          break
+        }
+      }
+    }
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => el.removeEventListener('touchmove', onTouchMove)
+  }, [])
+
+  function reset() {
+    setDragIdx(null); setDragOverIdx(null)
+    dragRef.current = null; overRef.current = null
+  }
+
+  function getProps(i) {
+    return {
+      'data-di': i,
+      // Desktop – HTML5 DnD
+      draggable:   true,
+      onDragStart: () => { setDragIdx(i); dragRef.current = i },
+      onDragOver:  e => { e.preventDefault(); setDragOverIdx(i); overRef.current = i },
+      onDrop:      () => { if (dragRef.current !== null) onMove(dragRef.current, i); reset() },
+      onDragEnd:   () => reset(),
+      // Mobile – touch events
+      onTouchStart: () => { setDragIdx(i); dragRef.current = i },
+      onTouchEnd:   () => {
+        if (dragRef.current !== null && overRef.current !== null && dragRef.current !== overRef.current) {
+          onMove(dragRef.current, overRef.current)
+        }
+        reset()
+      },
+    }
+  }
+
+  return { listRef, dragIdx, dragOverIdx, getProps }
+}
+
 const SAMPLE_ROUTINES = [
   {
     id: 1, type: 'routine', name: 'Morning Routine', time: '07:00', emoji: '🌅', days: ['mon','tue','wed','thu','fri','sat','sun'],
@@ -88,9 +150,6 @@ function RoutineModal({ routine, onSave, onClose }) {
   const [steps, setSteps] = useState(
     routine?.steps.map(s => ({ ...s })) || [{ id: Date.now(), name: '', dur: 5 }]
   )
-  const [dragIdx,     setDragIdx]     = useState(null)
-  const [dragOverIdx, setDragOverIdx] = useState(null)
-
   function moveStep(from, to) {
     if (from === to) return
     setSteps(prev => {
@@ -100,6 +159,8 @@ function RoutineModal({ routine, onSave, onClose }) {
       return next
     })
   }
+
+  const { listRef: stepsListRef, dragIdx, dragOverIdx, getProps: getStepProps } = useListDrag(moveStep)
 
   function addStep() {
     if (type === 'trigger' && steps.length >= 5) return
@@ -193,15 +254,12 @@ function RoutineModal({ routine, onSave, onClose }) {
 
           <div className="steps-section">
             <label className="steps-label">Steps</label>
+            <div ref={stepsListRef}>
             {steps.map((s, i) => (
               <div
                 key={s.id}
                 className={`step-edit-row${dragIdx === i ? ' step-dragging' : ''}${dragOverIdx === i && dragIdx !== i ? ' step-drag-over' : ''}`}
-                draggable
-                onDragStart={() => setDragIdx(i)}
-                onDragOver={e => { e.preventDefault(); setDragOverIdx(i) }}
-                onDrop={() => { moveStep(dragIdx, i); setDragIdx(null); setDragOverIdx(null) }}
-                onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
+                {...getStepProps(i)}
               >
                 <span className="step-drag-handle" title="Drag to reorder">⠿</span>
                 <span className="step-num">{i + 1}</span>
@@ -222,6 +280,7 @@ function RoutineModal({ routine, onSave, onClose }) {
                 <button className="step-remove" onClick={() => removeStep(s.id)}>×</button>
               </div>
             ))}
+            </div>
             {type === 'trigger' && steps.length >= 5
               ? <p className="type-hint" style={{marginTop:'0.5rem'}}>Max 5 steps reached for triggers.</p>
               : <button className="add-step-btn" onClick={addStep}>+ Add step</button>
@@ -250,9 +309,6 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   const [toast, setToast] = useState('')
   const [stepLog, setStepLog] = useState([])
   const [paused, setPaused] = useState(false)
-  const [dragIdx, setDragIdx] = useState(null)
-  const [dragOverIdx, setDragOverIdx] = useState(null)
-
   // ── Log / time tracking state ──
   const [initState, setInitState]   = useState('loading') // loading | restart | running
   const [existingLog, setExistingLog] = useState(null)
@@ -599,6 +655,8 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
     })
   }
 
+  const { listRef: upcomingRef, dragIdx, dragOverIdx, getProps: getUpProps } = useListDrag(moveStepTo)
+
   // ── Loading / restart prompt screens ──
   if (initState === 'loading') {
     return (
@@ -786,7 +844,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       </div>
 
       {upcoming.length > 0 && (
-        <div className="upcoming">
+        <div className="upcoming" ref={upcomingRef}>
           <div className="upcoming-label">Up next</div>
           {upcoming.map((s, i) => {
             const qIdx = stepIdx + 1 + i
@@ -794,11 +852,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
               <div
                 key={s.id + '-' + i}
                 className={`upcoming-item ${s.deferred ? 'up-deferred' : ''} ${dragIdx === qIdx ? 'up-dragging' : ''} ${dragOverIdx === qIdx && dragIdx !== qIdx ? 'up-drag-over' : ''}`}
-                draggable
-                onDragStart={() => setDragIdx(qIdx)}
-                onDragOver={e => { e.preventDefault(); setDragOverIdx(qIdx) }}
-                onDrop={() => { if (dragIdx !== null) moveStepTo(dragIdx, qIdx); setDragIdx(null); setDragOverIdx(null) }}
-                onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
+                {...getUpProps(qIdx)}
               >
                 <span className="up-n">{stepIdx + 2 + i}</span>
                 <span className="up-name">{s.name}</span>

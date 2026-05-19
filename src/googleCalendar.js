@@ -1,19 +1,19 @@
 // ─── Google Calendar integration ────────────────────────────────────────────
 //
-// Current approach: GIS token model with silent re-auth.
-//   - User connects once. A "gcal_connected" flag is saved to localStorage.
-//   - On every Calendar mount, we silently request a fresh token with no popup.
-//   - If silent re-auth fails (revoked, signed out of Google), we show the
-//     connect button so the user can re-authorise.
-//
-// Future upgrade path (write access):
-//   - Switch to authorization code + PKCE flow.
-//   - Store the refresh token in Supabase user metadata.
-//   - Silently refresh access tokens server-side forever.
-//   - Change SCOPES below to include calendar (read + write).
+// Web:    GIS token model (popup) — works in browser.
+// Native: @capacitor/browser opens Chrome Custom Tabs for OAuth, then the
+//         deep-link com.mar.addapp://oauth2callback returns the token.
+//         This is the only approach that works inside Android WebView.
 // ────────────────────────────────────────────────────────────────────────────
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+import { Capacitor } from '@capacitor/core'
+
+const CLIENT_ID    = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const REDIRECT_URI = 'com.mar.addapp://oauth2callback'
+
+export function isNativeApp() {
+  return Capacitor.isNativePlatform()
+}
 
 // ── Scopes ───────────────────────────────────────────────────────────────────
 // To add write access later, change to:
@@ -93,6 +93,61 @@ export function connectGoogle(onToken, onError) {
     localStorage.setItem(LS_CONNECTED, 'true')
     onToken(resp.access_token)
   })
+}
+
+/**
+ * Native OAuth (Android / Capacitor).
+ * Opens Chrome Custom Tabs → Google login → deep-link redirect back to app.
+ * Requires @capacitor/browser and @capacitor/app to be installed.
+ * The redirect URI com.mar.addapp://oauth2callback must be registered in
+ * Google Cloud Console as an authorised redirect URI for this client.
+ */
+export async function connectGoogleNative(onToken, onError) {
+  if (!CLIENT_ID || CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE') {
+    onError('Google Client ID not configured.')
+    return
+  }
+  try {
+    const { Browser } = await import('@capacitor/browser')
+    const { App }     = await import('@capacitor/app')
+
+    const params = new URLSearchParams({
+      client_id:              CLIENT_ID,
+      redirect_uri:           REDIRECT_URI,
+      response_type:          'token',
+      scope:                  SCOPES,
+      include_granted_scopes: 'true',
+    })
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`
+
+    // Listen for the deep-link callback before opening the browser
+    const listener = await App.addListener('appUrlOpen', async (event) => {
+      await listener.remove()
+      try { await Browser.close() } catch (_) {}
+
+      const url = event.url || ''
+      if (!url.startsWith(REDIRECT_URI)) {
+        onError('Unexpected redirect URL')
+        return
+      }
+
+      // Token lives in the URL fragment: #access_token=xxx&expires_in=3599
+      const fragment = url.includes('#') ? url.split('#')[1] : url.split('?')[1] || ''
+      const p        = new URLSearchParams(fragment)
+      const token    = p.get('access_token')
+      const expires  = parseInt(p.get('expires_in') || '3600')
+
+      if (!token) { onError('No access token in redirect — check Google Console redirect URIs'); return }
+
+      _saveToken(token, expires)
+      localStorage.setItem(LS_CONNECTED, 'true')
+      onToken(token)
+    })
+
+    await Browser.open({ url: authUrl })
+  } catch (err) {
+    onError(`Native OAuth failed: ${err.message}`)
+  }
 }
 
 /**

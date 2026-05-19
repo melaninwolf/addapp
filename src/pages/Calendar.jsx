@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { loadGIS, connectGoogle, silentReconnect, disconnectGoogle, fetchEvents, eventStartDate, eventTimeLabel, isConnected, getCachedToken } from '../googleCalendar'
+import { loadGIS, connectGoogle, connectGoogleNative, silentReconnect, disconnectGoogle, fetchEvents, eventStartDate, eventTimeLabel, isConnected, getCachedToken, isNativeApp } from '../googleCalendar'
 import EmojiPicker from '../components/EmojiPicker'
 import './Calendar.css'
 
@@ -1449,10 +1449,13 @@ export default function Calendar({ userId }) {
 
   function connectGcal() {
     setGcalError('')
-    connectGoogle(
-      (token) => { setGcalToken(token); fetchGcalEvents(token) },
-      (err)   => setGcalError(err)
-    )
+    const onToken = (token) => { setGcalToken(token); fetchGcalEvents(token) }
+    const onError = (err)   => setGcalError(String(err))
+    if (isNativeApp()) {
+      connectGoogleNative(onToken, onError)
+    } else {
+      connectGoogle(onToken, onError)
+    }
   }
 
   function disconnectGcal() {

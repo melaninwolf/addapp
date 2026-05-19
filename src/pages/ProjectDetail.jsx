@@ -150,16 +150,28 @@ export default function ProjectDetail({ userId }) {
     if (!userId || !id) return
     const [projRes, msRes, taskRes] = await Promise.all([
       supabase.from('projects').select('*').eq('id', id).eq('user_id', userId).single(),
-      supabase.from('milestones')
-        .select('*, micro_milestones(*)')
-        .eq('project_id', id)
-        .order('order_index')
-        .order('order_index', { referencedTable: 'micro_milestones' }),
+      supabase.from('milestones').select('*').eq('project_id', id).order('order_index'),
       supabase.from('tasks').select('*').eq('project_id', id).eq('user_id', userId),
     ])
+    // Load micro_milestones by milestone IDs (no project_id column on that table)
+    const msIds = (msRes.data || []).map(m => m.id)
+    let microData = []
+    if (msIds.length > 0) {
+      const { data } = await supabase.from('micro_milestones').select('*').in('milestone_id', msIds).order('order_index')
+      microData = data || []
+    }
+    const microMap = {}
+    for (const mm of microData) {
+      if (!microMap[mm.milestone_id]) microMap[mm.milestone_id] = []
+      microMap[mm.milestone_id].push(mm)
+    }
+    const milestones = (msRes.data || []).map(m => ({
+      ...m,
+      micro_milestones: microMap[m.id] || [],
+    }))
     const proj = projRes.data
     setProject(proj)
-    setMilestones(msRes.data || [])
+    setMilestones(milestones)
     setTasks(taskRes.data || [])
 
     // Load all trigger-type routines for the selector
@@ -233,9 +245,9 @@ export default function ProjectDetail({ userId }) {
     const { data, error } = await supabase
       .from('milestones')
       .insert([{ project_id: id, user_id: userId, name: newMs.trim(), due_date: newMsDue || null, order_index: milestones.length }])
-      .select('*, micro_milestones(*)')
+      .select('*')
     if (!error && data) {
-      setMilestones(prev => [...prev, data[0]])
+      setMilestones(prev => [...prev, { ...data[0], micro_milestones: [] }])
       setNewMs(''); setNewMsDue(''); setAddingMs(false)
     }
   }
@@ -246,11 +258,19 @@ export default function ProjectDetail({ userId }) {
     if (newDone && milestone.micro_milestones?.length > 0) {
       await supabase.from('micro_milestones').update({ done: true }).eq('milestone_id', milestone.id)
     }
-    const { data } = await supabase
-      .from('milestones').select('*, micro_milestones(*)')
-      .eq('project_id', id).order('order_index')
-      .order('order_index', { referencedTable: 'micro_milestones' })
-    setMilestones(data || [])
+    const { data: msData2 } = await supabase.from('milestones').select('*').eq('project_id', id).order('order_index')
+    const msIds2 = (msData2 || []).map(m => m.id)
+    let microData2 = []
+    if (msIds2.length > 0) {
+      const { data } = await supabase.from('micro_milestones').select('*').in('milestone_id', msIds2).order('order_index')
+      microData2 = data || []
+    }
+    const microMap2 = {}
+    for (const mm of microData2) {
+      if (!microMap2[mm.milestone_id]) microMap2[mm.milestone_id] = []
+      microMap2[mm.milestone_id].push(mm)
+    }
+    setMilestones((msData2 || []).map(m => ({ ...m, micro_milestones: microMap2[m.id] || [] })))
   }
 
   async function deleteMilestone(msId) {

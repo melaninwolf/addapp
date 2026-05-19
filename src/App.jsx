@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { HashRouter as BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 import Home     from './pages/Home.jsx'
 import Health   from './pages/Health.jsx'
 import Routines from './pages/Routines.jsx'
@@ -162,6 +163,22 @@ function AppShell({ user }) {
     }
     window.addEventListener('xp-update', handler)
     return () => window.removeEventListener('xp-update', handler)
+  }, [])
+
+  // ── Android hardware back button ──────────────────────────────
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    let handle = null
+    import('@capacitor/app').then(({ App: CapApp }) => {
+      CapApp.addListener('backButton', ({ canGoBack }) => {
+        if (canGoBack) {
+          window.history.back()
+        } else {
+          CapApp.exitApp()
+        }
+      }).then(h => { handle = h })
+    })
+    return () => { handle?.remove() }
   }, [])
 
   const showFull = !collapsed || isMobile

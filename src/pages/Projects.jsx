@@ -262,11 +262,22 @@ export default function Projects({ userId }) {
   useEffect(() => {
     if (!userId) { setLoading(false); return }
     Promise.all([
-      supabase.from('projects').select('*, milestones(id, done)').eq('user_id', userId),
+      supabase.from('projects').select('*').eq('user_id', userId),
+      supabase.from('milestones').select('id, project_id, done').eq('user_id', userId),
       supabase.from('tasks').select('id, project_id').eq('user_id', userId).not('project_id', 'is', null),
       supabase.from('routines').select('id, name, emoji').eq('user_id', userId).eq('type', 'trigger'),
-    ]).then(([projRes, taskRes, trigRes]) => {
-      setProjects(projRes.data || [])
+    ]).then(([projRes, msRes, taskRes, trigRes]) => {
+      // Group milestones by project_id and attach to each project
+      const msMap = {}
+      for (const m of (msRes.data || [])) {
+        if (!msMap[m.project_id]) msMap[m.project_id] = []
+        msMap[m.project_id].push(m)
+      }
+      const projects = (projRes.data || []).map(p => ({
+        ...p,
+        milestones: msMap[p.id] || [],
+      }))
+      setProjects(projects)
       const counts = {}
       for (const t of (taskRes.data || [])) {
         counts[t.project_id] = (counts[t.project_id] || 0) + 1
@@ -301,18 +312,18 @@ export default function Projects({ userId }) {
     const { data, error } = await supabase
       .from('projects')
       .insert([{ ...payload, user_id: userId }])
-      .select('*, milestones(id, done)')
-    if (!error && data) setProjects(prev => [data[0], ...prev])
+      .select('*')
+    if (!error && data) setProjects(prev => [{ ...data[0], milestones: [] }, ...prev])
   }
 
   async function updateProject(id, payload) {
     const { data, error } = await supabase
       .from('projects').update(payload)
       .eq('id', id).eq('user_id', userId)
-      .select('*, milestones(id, done)')
+      .select('*')
     if (!error && data) {
       setProjects(prev => prev.map(p =>
-        p.id === id ? { ...data[0], _taskCount: p._taskCount } : p
+        p.id === id ? { ...data[0], milestones: p.milestones || [], _taskCount: p._taskCount } : p
       ))
     }
   }
