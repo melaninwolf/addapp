@@ -108,8 +108,8 @@ export async function connectGoogleNative(onToken, onError) {
     return
   }
   try {
-    const { Browser } = await import('@capacitor/browser')
-    const { App }     = await import('@capacitor/app')
+    const { Browser } = await import(/* @vite-ignore */ '@capacitor/browser')
+    const { App }     = await import(/* @vite-ignore */ '@capacitor/app')
 
     const params = new URLSearchParams({
       client_id:              CLIENT_ID,

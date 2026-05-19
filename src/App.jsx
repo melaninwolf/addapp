@@ -169,7 +169,7 @@ function AppShell({ user }) {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
     let handle = null
-    import('@capacitor/app').then(({ App: CapApp }) => {
+    import(/* @vite-ignore */ '@capacitor/app').then(({ App: CapApp }) => {
       CapApp.addListener('backButton', ({ canGoBack }) => {
         if (canGoBack) {
           window.history.back()
