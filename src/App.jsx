@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { HashRouter as BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import Home     from './pages/Home.jsx'
 import Health   from './pages/Health.jsx'
 import Routines from './pages/Routines.jsx'

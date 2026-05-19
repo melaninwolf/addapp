@@ -501,6 +501,19 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
 
           {activeTab === 'priorities' && (
             <div className="journal-panel">
+              {(healthLog?.energy_score || healthLog?.sleep_hours) && (
+                <div className="journal-health-snapshot">
+                  <span className="jhs-label">From Health</span>
+                  <div className="jhs-chips">
+                    {healthLog.energy_score && (
+                      <span className="jhs-chip">⚡ Energy {healthLog.energy_score} / 100</span>
+                    )}
+                    {healthLog.sleep_hours && (
+                      <span className="jhs-chip">😴 Sleep {healthLog.sleep_hours}h</span>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="journal-col-title">Top priorities</div>
               {priorities.map((p, i) => (
                 <div key={i} className="priority-row">

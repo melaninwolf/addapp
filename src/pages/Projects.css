@@ -9,6 +9,42 @@
 }
 
 /* ── Toolbar ─────────────────────────────────────────────────── */
+/* ── Search bar ─────────────────────────────────── */
+.proj-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+.proj-search-bar:focus-within { border-color: var(--accent); }
+.proj-search-icon { font-size: 13px; color: var(--text3); flex-shrink: 0; }
+.proj-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text1);
+  font-size: 14px;
+  font-family: inherit;
+}
+.proj-search-input::placeholder { color: var(--text3); }
+.proj-search-clear {
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.proj-search-clear:hover { color: var(--text2); }
+
 .proj-toolbar {
   display: flex;
   align-items: center;

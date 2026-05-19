@@ -4,12 +4,20 @@ import { addMAM, MAM_FOCUS } from '../xp'
 import './FocusSession.css'
 
 const SESSION_TYPES = [
-  { value: 'deep_work', label: 'Deep Work', emoji: '🧠' },
-  { value: 'study',     label: 'Study',     emoji: '📚' },
-  { value: 'creative',  label: 'Creative',  emoji: '🎨' },
-  { value: 'admin',     label: 'Admin',     emoji: '📋' },
-  { value: 'planning',  label: 'Planning',  emoji: '🗓️' },
-  { value: 'other',     label: 'Other',     emoji: '⚡' },
+  { value: 'deep_work', label: 'Deep work',  emoji: '🧠', sub: 'High-effort thinking' },
+  { value: 'study',     label: 'Study',      emoji: '📚', sub: 'Learning something'   },
+  { value: 'creative',  label: 'Creative',   emoji: '🎨', sub: 'Making something'     },
+  { value: 'admin',     label: 'Admin',      emoji: '📋', sub: 'Logistics, email'     },
+  { value: 'planning',  label: 'Planning',   emoji: '🗓️', sub: 'Mapping things out'  },
+  { value: 'other',     label: 'Other',      emoji: '⚡', sub: 'Something else'       },
+]
+
+const FOCUS_MOTTOS = [
+  'Phone in another room? Tabs closed? You\'re doing great.',
+  'One thing. Just this.',
+  'The work is the point. Keep going.',
+  'Every minute here counts.',
+  'Deep in it. Stay.',
 ]
 
 const FOCUS_MINS       = 25
@@ -245,6 +253,7 @@ export default function FocusSession({ userId }) {
   }
 
   // ── Derived ──
+  const motto = FOCUS_MOTTOS[Math.floor(Date.now() / 1000 / 60) % FOCUS_MOTTOS.length]
   const posInSet       = completedCount % SET_SIZE              // 0-3 done in current set
   const nextBreakMins  = (completedCount + 1) % SET_SIZE === 0  // after NEXT session
     ? LONG_BREAK_MINS : SHORT_BREAK_MINS
@@ -264,13 +273,9 @@ export default function FocusSession({ userId }) {
       {/* ════════════ IDLE ════════════ */}
       {phase === 'idle' && (
         <div className="focus-idle">
-          <h1 className="focus-heading">Focus Session</h1>
-
-          {/* Session position dots */}
+          {/* Session position */}
           <div className="focus-set-info">
-            <span className="focus-set-label">
-              Session {posInSet + 1} of {SET_SIZE}
-            </span>
+            <span className="focus-session-counter">SESSION {posInSet + 1} OF {SET_SIZE}</span>
             <div className="focus-dots">
               {Array.from({ length: SET_SIZE }, (_, i) => (
                 <div
@@ -279,7 +284,12 @@ export default function FocusSession({ userId }) {
                 />
               ))}
             </div>
+            <p className="focus-long-break-hint">
+              {posInSet === SET_SIZE - 1 ? '🌿 Long break after this one' : `Long break after #${SET_SIZE}`}
+            </p>
           </div>
+
+          <div className="focus-duration-label">{FOCUS_MINS} minutes of one thing</div>
 
           {/* Session type */}
           <div className="focus-section-label">Session type</div>
@@ -291,7 +301,10 @@ export default function FocusSession({ userId }) {
                 onClick={() => setSessionType(t.value)}
               >
                 <span className="fs-type-emoji">{t.emoji}</span>
-                <span>{t.label}</span>
+                <div className="fs-type-text">
+                  <span className="fs-type-label">{t.label}</span>
+                  <span className="fs-type-sub">{t.sub}</span>
+                </div>
               </button>
             ))}
           </div>
@@ -379,22 +392,17 @@ export default function FocusSession({ userId }) {
             </svg>
             <div className="focus-ring-inner">
               <div className="focus-timer-display">{fmt(timeLeft)}</div>
-              <div className="focus-timer-label">focus</div>
+              <div className="focus-timer-label">remaining · focus</div>
             </div>
           </div>
 
           {/* Set position */}
           <div className="focus-set-row">
-            <div className="focus-dots">
-              {Array.from({ length: SET_SIZE }, (_, i) => (
-                <div
-                  key={i}
-                  className={`focus-dot${i < posInSet ? ' focus-dot-done' : ''}${i === posInSet ? ' focus-dot-active' : ''}`}
-                />
-              ))}
-            </div>
-            <span className="focus-set-label">Session {posInSet + 1} of {SET_SIZE}</span>
+            <span className="focus-session-counter">SESSION {posInSet + 1} OF {SET_SIZE}</span>
           </div>
+
+          {/* Motivational nudge */}
+          <p className="focus-motto">● {motto}</p>
 
           {/* Controls */}
           <div className="focus-controls">

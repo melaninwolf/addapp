@@ -487,23 +487,27 @@ export default function Tasks({ userId }) {
   function openAdd(status) { setEditingTask(null); setDefStatus(status); setShowForm(true) }
   function openEdit(task)  { setEditingTask(task); setShowForm(true) }
 
+  // Count tasks done this week
+  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); weekStart.setHours(0,0,0,0)
+  const doneThisWeek = tasks.filter(t => t.status === 'done' && new Date(t.updated_at) >= weekStart).length
+
   return (
     <div className="tasks-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Tasks</h1>
           <p className="page-sub">
-            {tasks.length > 0
-              ? `${totalDone} of ${tasks.length} done`
+            {doneThisWeek > 0
+              ? `${doneThisWeek} done this week`
               : 'Your master task board.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div className="task-view-toggle">
             <button className={`tvt-btn${taskView === 'kanban' ? ' active' : ''}`}
-              onClick={() => setTaskView('kanban')}>📋 Board</button>
+              onClick={() => setTaskView('kanban')}>Board</button>
             <button className={`tvt-btn${taskView === 'daily' ? ' active' : ''}`}
-              onClick={() => setTaskView('daily')}>📅 Daily</button>
+              onClick={() => setTaskView('daily')}>Daily</button>
           </div>
           <button className="cal-add-btn" onClick={() => openAdd('todo')}>+ Add task</button>
         </div>

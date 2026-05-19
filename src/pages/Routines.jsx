@@ -665,9 +665,15 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       )}
 
       <div className="runner-header">
-        <button className="btn-ghost-sm" onClick={onFinish}>← Exit</button>
-        <div className="runner-title">{routine.emoji} {routine.name}</div>
-        <div className="runner-prog">{stepIdx + 1} / {queue.length}</div>
+        <button className="btn-ghost-sm" onClick={onFinish}>← Exit routine</button>
+        <div className="runner-breadcrumb">Step {stepIdx + 1} of {queue.length} · {routine.emoji} {routine.name}</div>
+      </div>
+
+      {/* Step progress dots */}
+      <div className="runner-progress-dots">
+        {queue.map((_, i) => (
+          <div key={i} className={`runner-dot${i < stepIdx ? ' done' : i === stepIdx ? ' current' : ''}`} />
+        ))}
       </div>
 
       {/* TEMP: test notification button — remove before shipping */}
@@ -916,14 +922,25 @@ export default function Routines({ userId }) {
     )
   }
 
+  const doneToday = routines.filter(r => todayLogs.some(l => l.routine_id === r.id && ['completed','marked_done'].includes(l.status))).length
+
   return (
     <div className="routines-page">
-      <div className="page-header">
+      <div className="routines-page-header">
         <div>
+          <p className="page-tagline">Build habits that stick. One step at a time.</p>
           <h1 className="page-title">Routines</h1>
-          <p className="page-sub">Build habits that stick. One step at a time.</p>
         </div>
-        <button className="btn-primary" onClick={() => setModal('new')}>+ New routine</button>
+      </div>
+
+      <div className="routines-stats-bar">
+        <span className="routines-stats-text">
+          {doneToday > 0
+            ? <><span className="stats-done">{doneToday} done today · +{doneToday * 5}g matter</span></>
+            : <span className="stats-hint">Nothing done yet today — start a routine 🚀</span>
+          }
+        </span>
+        <button className="btn-primary btn-sm" onClick={() => setModal('new')}>+ New routine</button>
       </div>
 
       {routines.length === 0 ? (
@@ -959,27 +976,27 @@ export default function Routines({ userId }) {
               </div>
             </div>
             <div className="rc-steps">
-              {r.steps.slice(0, 4).map((s, i) => (
+              {r.steps.slice(0, 3).map((s, i) => (
                 <div key={i} className="rc-step-row">
-                  <span className="rc-step-dot" />
+                  <span className="rc-step-check">☐</span>
                   <span className="rc-step-name">{s.name}</span>
                   <span className="rc-step-dur">{s.dur}m</span>
                 </div>
               ))}
-              {r.steps.length > 4 && (
-                <div className="rc-more">+{r.steps.length - 4} more steps</div>
+              {r.steps.length > 3 && (
+                <div className="rc-more">+{r.steps.length - 3} more steps</div>
               )}
             </div>
             <div className="rc-actions">
-              <button className="btn-primary btn-sm" onClick={() => setRunning(r)}>Start</button>
+              <button className="btn-primary btn-sm" onClick={() => setRunning(r)}>▶ Start</button>
               <button className="btn-ghost btn-sm" onClick={() => setModal(r)}>Edit</button>
               {!isDoneToday && (
-                <button className="btn-ghost btn-sm" onClick={() => openMarkDone(r)} title="Log as done without running">✓ Mark done</button>
+                <button className="btn-ghost btn-sm" onClick={() => openMarkDone(r)}>✓ Mark done</button>
               )}
               {todayLog && (
-                <button className="btn-ghost btn-sm" onClick={() => openEditLog(r)} title="Edit start/end times">✏️ Times</button>
+                <button className="btn-ghost btn-sm" onClick={() => openEditLog(r)}>✏ Times</button>
               )}
-              <button className="btn-danger btn-sm" onClick={() => setDeleteConfirm(r)}>Delete</button>
+              <button className="rc-delete-btn" onClick={() => setDeleteConfirm(r)} title="Delete">🗑</button>
             </div>
           </div>
         )}

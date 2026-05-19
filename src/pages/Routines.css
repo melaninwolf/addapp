@@ -1,8 +1,20 @@
 /* PAGE */
 .routines-page { max-width: 860px; }
-.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem; }
-.page-title { font-size: 28px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+.routines-page-header { margin-bottom: 0.5rem; }
+.page-tagline { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; margin-bottom: 4px; }
+.page-title { font-size: 28px; font-weight: 800; letter-spacing: -1px; margin-bottom: 0; }
 .page-sub { font-size: 14px; color: var(--text2); }
+
+/* STATS BAR */
+.routines-stats-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 1.5rem;
+  padding: 10px 14px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.routines-stats-text { font-size: 13px; color: var(--text2); }
+.stats-done { color: var(--green); font-weight: 600; }
+.stats-hint { color: var(--text3); }
 
 /* BUTTONS */
 .btn-primary {
@@ -27,21 +39,39 @@
 
 /* CARD */
 .routine-card {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
   padding: 1.25rem; transition: border-color 0.15s;
+  display: flex; flex-direction: column; gap: 0;
 }
 .routine-card:hover { border-color: var(--border2); }
-.rc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
-.rc-emoji { font-size: 28px; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--bg3); border-radius: var(--radius-sm); }
-.rc-name { font-size: 16px; font-weight: 700; margin-bottom: 3px; }
-.rc-meta { font-size: 12px; color: var(--text2); font-family: var(--mono); }
-.rc-steps { display: flex; flex-direction: column; gap: 4px; margin-bottom: 1rem; }
-.rc-step-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); }
-.rc-step-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
-.rc-step-name { flex: 1; }
-.rc-step-dur { font-family: var(--mono); font-size: 11px; color: var(--text3); }
-.rc-more { font-size: 12px; color: var(--text3); padding-left: 13px; }
-.rc-actions { display: flex; gap: 8px; }
+.rc-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.rc-emoji {
+  font-size: 24px; width: 44px; height: 44px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg2); border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.rc-info { flex: 1; min-width: 0; }
+.rc-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; color: var(--text1); }
+.rc-meta { font-size: 11px; color: var(--text3); line-height: 1.6; }
+.rc-steps {
+  display: flex; flex-direction: column; gap: 3px;
+  margin-bottom: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.rc-step-row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text2); }
+.rc-step-check { font-size: 11px; color: var(--text3); flex-shrink: 0; line-height: 1; }
+.rc-step-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-step-dur { font-family: var(--mono); font-size: 11px; color: var(--text3); flex-shrink: 0; }
+.rc-more { font-size: 11px; color: var(--accent); padding-left: 18px; margin-top: 2px; cursor: default; }
+.rc-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: auto; }
+.rc-delete-btn {
+  margin-left: auto; background: transparent; border: none;
+  color: var(--text3); font-size: 14px; cursor: pointer; padding: 4px 6px;
+  border-radius: 6px; transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.rc-delete-btn:hover { color: var(--red); background: var(--red-bg); }
 
 /* EMPTY */
 .empty-state { text-align: center; padding: 4rem 2rem; color: var(--text2); }
@@ -134,9 +164,22 @@
   padding: 10px 20px; border-radius: 99px; font-size: 13px; color: var(--text);
   z-index: 50; white-space: nowrap;
 }
-.runner-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+.runner-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 12px; }
+.runner-breadcrumb { font-size: 13px; font-weight: 600; color: var(--text2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .runner-title { font-size: 16px; font-weight: 700; }
 .runner-prog { font-family: var(--mono); font-size: 12px; color: var(--text2); }
+
+/* Step progress dots */
+.runner-progress-dots {
+  display: flex; gap: 6px; margin-bottom: 1.5rem; justify-content: center;
+}
+.runner-dot {
+  height: 4px; flex: 1; max-width: 40px; border-radius: 99px;
+  background: var(--bg3); border: 1px solid var(--border);
+  transition: background 0.3s;
+}
+.runner-dot.done { background: var(--accent); border-color: var(--accent); opacity: 0.5; }
+.runner-dot.current { background: var(--accent); border-color: var(--accent); }
 
 .step-card {
   background: var(--bg2); border: 1px solid var(--accent);

@@ -45,6 +45,22 @@ const TREE_TYPES = {
     maxDepth: 6,  leafDepth: 5, splitChance: 0.42,
     branchColor: '#5c3820', leafColor: '#d44a10', leafR: 7,
   },
+  bonsai: {
+    label: 'Bonsai',      emoji: '🪴',
+    desc:  'Patient & precise. Slow to grow, endlessly refined.',
+    trunkLen: 48, trunkWidth: 12,
+    spread: 1.60, splitAngle: 0.55, lengthDecay: 0.60,
+    maxDepth: 5,  leafDepth: 4, splitChance: 0.50,
+    branchColor: '#7a5a38', leafColor: '#3a8a50', leafR: 6,
+  },
+  bamboo: {
+    label: 'Bamboo',      emoji: '🎋',
+    desc:  'Fast & flexible. Shoots up quickly, sways with ease.',
+    trunkLen: 120, trunkWidth: 6,
+    spread: 0.30, splitAngle: 0.25, lengthDecay: 0.88,
+    maxDepth: 7,  leafDepth: 6, splitChance: 0.10,
+    branchColor: '#4a7a30', leafColor: '#a0e050', leafR: 5,
+  },
 }
 
 // ─── Seeded RNG (LCG) ──────────────────────────────────────────────────────
@@ -286,8 +302,10 @@ function AddHobbyModal({ userId, onClose, onAdd }) {
               <button key={key} type="button"
                 className={`tree-pick-card${treeType === key ? ' active' : ''}`}
                 onClick={() => setTreeType(key)}>
-                <span className="tpc-emoji">{cfg.emoji}</span>
-                <span className="tpc-name">{cfg.label}</span>
+                <div className="tpc-preview">
+                  <HobbyTree hobby={{ tree_type: key, total_minutes: 90, id: key }} size="mini" />
+                </div>
+                <span className="tpc-name">{cfg.emoji} {cfg.label}</span>
                 <span className="tpc-desc">{cfg.desc}</span>
               </button>
             ))}

@@ -328,16 +328,38 @@ export default function Projects({ userId }) {
     </div>
   )
 
+  const activeCount   = projects.filter(p => p.status === 'active').length
+  const [search, setSearch] = useState('')
+  const searchedDisplayed = displayed.filter(p =>
+    !search.trim() || p.name.toLowerCase().includes(search.toLowerCase())
+  )
+
   return (
     <div className="projects-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Projects</h1>
-          <p className="page-sub">Track everything from idea to done.</p>
+          <p className="page-sub">
+            {activeCount > 0 ? `${activeCount} active` : 'Track everything from idea to done.'}
+          </p>
         </div>
         <button className="cal-add-btn" onClick={() => { setEditingProject(null); setShowModal(true) }}>
           + New project
         </button>
+      </div>
+
+      {/* Search bar */}
+      <div className="proj-search-bar">
+        <span className="proj-search-icon">🔍</span>
+        <input
+          className="proj-search-input"
+          placeholder="Find a project…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && (
+          <button className="proj-search-clear" onClick={() => setSearch('')}>✕</button>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -376,19 +398,20 @@ export default function Projects({ userId }) {
       </div>
 
       {/* Empty */}
-      {displayed.length === 0 && (
+      {searchedDisplayed.length === 0 && (
         <div className="proj-empty">
           <span style={{ fontSize: 36 }}>📁</span>
           <p>{projects.length === 0
             ? 'No projects yet. Create one to get started.'
+            : search ? 'No projects match that search.'
             : 'No projects match this filter.'}</p>
         </div>
       )}
 
       {/* Grid */}
-      {view === 'grid' && displayed.length > 0 && (
+      {view === 'grid' && searchedDisplayed.length > 0 && (
         <div className="proj-grid">
-          {displayed.map(p => (
+          {searchedDisplayed.map(p => (
             <ProjectCard key={p.id} project={p}
               onClick={() => navigate(`/projects/${p.id}`)} />
           ))}
@@ -396,7 +419,7 @@ export default function Projects({ userId }) {
       )}
 
       {/* List */}
-      {view === 'list' && displayed.length > 0 && (
+      {view === 'list' && searchedDisplayed.length > 0 && (
         <div className="proj-list-wrap">
           <div className="proj-list-head">
             <div style={{ width: 12 }} />
@@ -407,7 +430,7 @@ export default function Projects({ userId }) {
             <div style={{ minWidth: 110 }}>End</div>
             <div style={{ minWidth: 60, textAlign: 'right' }}>Tasks</div>
           </div>
-          {displayed.map(p => (
+          {searchedDisplayed.map(p => (
             <ProjectRow key={p.id} project={p}
               onClick={() => navigate(`/projects/${p.id}`)} />
           ))}
