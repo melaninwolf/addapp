@@ -1,0 +1,297 @@
+/* ── AddApp Extension Popup ──────────────────────────────────────────────── */
+
+:root {
+  --accent:   #7c3aed;
+  --accent2:  #6d28d9;
+  --bg:       #0f0f13;
+  --bg2:      #17171d;
+  --bg3:      #1e1e26;
+  --card:     #1e1e26;
+  --border:   #2a2a35;
+  --text:     #f1f1f5;
+  --text2:    #a0a0b5;
+  --text3:    #606075;
+  --red:      #ef4444;
+  --green:    #10b981;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 320px;
+  min-height: 200px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  overflow-x: hidden;
+}
+
+.screen { padding: 16px; }
+
+/* ── Logo ── */
+.logo {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.logo span, .logo-sm span { color: var(--accent); }
+.logo-sm {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+}
+
+/* ── Auth screen ── */
+#screen-auth { display: flex; flex-direction: column; gap: 10px; }
+#screen-auth .sub { font-size: 12px; color: var(--text3); margin-bottom: 4px; }
+
+/* ── Inputs ── */
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus { border-color: var(--accent); }
+input::placeholder { color: var(--text3); }
+
+/* ── Buttons ── */
+.btn-primary {
+  padding: 9px 16px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-primary:hover  { background: var(--accent2); }
+.btn-primary:active { opacity: 0.85; }
+
+.btn-primary.btn-full { width: 100%; }
+
+.btn-danger {
+  padding: 9px 16px;
+  border-radius: 9px;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+.btn-danger.btn-full { width: 100%; }
+.btn-danger:hover { opacity: 0.88; }
+
+.btn-ghost {
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.btn-ghost:hover { background: var(--bg3); color: var(--text); }
+
+.btn-xs { padding: 4px 8px; font-size: 11px; }
+
+.btn-icon {
+  padding: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ── Error ── */
+.error-msg {
+  background: #ef444420;
+  border: 1px solid #ef444440;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+/* ── Header ── */
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+/* ── Focus idle ── */
+.focus-idle { display: flex; flex-direction: column; gap: 8px; }
+.focus-idle-label { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
+.focus-input { width: 100%; }
+
+.dur-row { display: flex; gap: 6px; }
+.dur-btn {
+  flex: 1;
+  padding: 6px 4px;
+  border-radius: 7px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.dur-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dur-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ── Focus active ── */
+.focus-active { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.focus-active-label { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
+.focus-timer {
+  font-size: 38px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  color: var(--accent);
+  line-height: 1;
+}
+.focus-progress-track {
+  width: 100%;
+  height: 4px;
+  background: var(--bg3);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.focus-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 1s linear;
+}
+
+/* ── Divider ── */
+.divider { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+/* ── Section label ── */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.task-count {
+  font-size: 10px;
+  background: var(--bg3);
+  color: var(--text3);
+  border-radius: 99px;
+  padding: 1px 6px;
+}
+
+/* ── Task input row ── */
+.task-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.task-input { flex: 1; }
+
+/* ── Task list ── */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.task-loading {
+  font-size: 12px;
+  color: var(--text3);
+  padding: 8px 0;
+  text-align: center;
+}
+
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.task-item:hover { border-color: var(--accent); }
+
+.task-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.task-check:hover {
+  border-color: var(--green);
+  background: #10b98120;
+}
+.task-check.done {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.task-title {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+  flex: 1;
+}
+.task-title.done {
+  color: var(--text3);
+  text-decoration: line-through;
+}
+
+.priority-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.priority-dot.high   { background: #ef4444; }
+.priority-dot.medium { background: #f59e0b; }
+.priority-dot.low    { background: #10b981; }
+
+.task-empty {
+  font-size: 12px;
+  color: var(--text3);
+  text-align: center;
+  padding: 12px 0;
+}

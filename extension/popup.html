@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AddApp</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- Auth screen -->
+  <div id="screen-auth" class="screen">
+    <div class="logo">add<span>app</span></div>
+    <p class="sub">Sign in to your account</p>
+    <div id="auth-error" class="error-msg" style="display:none"></div>
+    <input id="auth-email"    type="email"    placeholder="Email" autocomplete="email" />
+    <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password" />
+    <button id="auth-submit" class="btn-primary">Sign in</button>
+  </div>
+
+  <!-- Main screen -->
+  <div id="screen-main" class="screen" style="display:none">
+
+    <!-- Header -->
+    <div class="popup-header">
+      <div class="logo-sm">add<span>app</span></div>
+      <button id="btn-signout" class="btn-ghost btn-xs">Sign out</button>
+    </div>
+
+    <!-- Focus section -->
+    <div id="focus-idle" class="focus-idle">
+      <div class="focus-idle-label">Start a focus session</div>
+      <input id="focus-label" type="text" placeholder="What are you working on?" class="focus-input" />
+      <div class="dur-row">
+        <button class="dur-btn active" data-min="25">25m</button>
+        <button class="dur-btn" data-min="45">45m</button>
+        <button class="dur-btn" data-min="60">60m</button>
+        <button class="dur-btn" data-min="90">90m</button>
+      </div>
+      <button id="btn-start-focus" class="btn-primary btn-full">🎯 Start focus</button>
+    </div>
+
+    <div id="focus-active" class="focus-active" style="display:none">
+      <div class="focus-active-label" id="focus-active-label">Focus Session</div>
+      <div class="focus-timer" id="focus-timer">25:00</div>
+      <div class="focus-progress-track">
+        <div class="focus-progress-fill" id="focus-progress-fill" style="width:0%"></div>
+      </div>
+      <button id="btn-stop-focus" class="btn-danger btn-full">■ End session</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Quick task capture -->
+    <div class="section-label">Quick capture</div>
+    <div class="task-input-row">
+      <input id="new-task-input" type="text" placeholder="Add a task…" class="task-input" />
+      <button id="btn-add-task" class="btn-primary btn-icon">+</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Task list -->
+    <div class="section-label">
+      Tasks
+      <span id="task-count" class="task-count"></span>
+    </div>
+    <div id="task-list" class="task-list">
+      <div class="task-loading">Loading…</div>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
