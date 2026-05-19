@@ -1,5 +1,11 @@
 {
   "appId": "com.mar.addapp",
   "appName": "AddApp",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_launcher",
+      "iconColor": "#7c3aed"
+    }
+  }
 }

@@ -83,6 +83,254 @@ function OrbitMap({ au }) {
   )
 }
 
+// ── Stats helpers ──────────────────────────────────────────────
+function fmtMins(m) {
+  if (!m) return '—'
+  const h   = Math.floor(m / 60)
+  const rem = m % 60
+  if (h === 0) return `${rem}m`
+  if (rem === 0) return `${h}h`
+  return `${h}h ${rem}m`
+}
+
+function parseLocalDate(str) {
+  if (!str) return new Date(0)
+  if (str.length === 10) {
+    const [y, mo, d] = str.split('-').map(Number)
+    return new Date(y, mo - 1, d)
+  }
+  return new Date(str)
+}
+
+function computeStreak(dateStrings) {
+  const s = new Set(dateStrings)
+  const today = new Date()
+  let cursor = new Date(today)
+  // If today has no entry yet, start from yesterday
+  if (!s.has(cursor.toISOString().split('T')[0])) cursor.setDate(cursor.getDate() - 1)
+  let streak = 0
+  for (let i = 0; i < 400; i++) {
+    const ds = cursor.toISOString().split('T')[0]
+    if (s.has(ds)) { streak++; cursor.setDate(cursor.getDate() - 1) }
+    else break
+  }
+  return streak
+}
+
+function hobbyStage(mins) {
+  if (mins >= 360) return 'mature'
+  if (mins >= 120) return 'growing'
+  if (mins >= 10)  return 'sapling'
+  return 'seed'
+}
+
+// ── Stats grid ─────────────────────────────────────────────────
+function StatsGrid({ userId }) {
+  const [period,  setPeriod]  = useState('week')
+  const [raw,     setRaw]     = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!userId) { setLoading(false); return }
+    loadAll()
+  }, [userId]) // eslint-disable-line
+
+  async function loadAll() {
+    const [rLogs, tasks, projects, focus, health, hobbies] = await Promise.all([
+      supabase.from('routine_logs').select('id,status,actual_duration_min,started_at').eq('user_id', userId),
+      supabase.from('tasks').select('id,status,updated_at').eq('user_id', userId),
+      supabase.from('projects').select('id,status').eq('user_id', userId),
+      supabase.from('focus_sessions').select('id,duration_min,started_at').eq('user_id', userId),
+      supabase.from('health_logs').select('id,date,water_ml,water_goal_ml').eq('user_id', userId),
+      supabase.from('hobbies').select('id,name,total_minutes').eq('user_id', userId),
+    ])
+    setRaw({
+      routineLogs: rLogs.data    || [],
+      tasks:       tasks.data    || [],
+      projects:    projects.data || [],
+      focus:       focus.data    || [],
+      health:      health.data   || [],
+      hobbies:     hobbies.data  || [],
+    })
+    setLoading(false)
+  }
+
+  if (loading) return <div className="stats-loading">Loading stats…</div>
+  if (!raw)    return null
+
+  // Period boundaries
+  const now = new Date()
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - now.getDay())
+  weekStart.setHours(0, 0, 0, 0)
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  function inPeriod(dateStr) {
+    const d = parseLocalDate(dateStr)
+    if (period === 'week')  return d >= weekStart
+    if (period === 'month') return d >= monthStart
+    return true
+  }
+
+  // ── Routines ──
+  const completedLogs    = raw.routineLogs.filter(r => r.status === 'completed')
+  const routinesInPeriod = completedLogs.filter(r => inPeriod(r.started_at))
+  const routineMins      = routinesInPeriod.reduce((a, r) => a + (r.actual_duration_min || 0), 0)
+  const routineDates     = completedLogs.map(r => r.started_at?.split('T')[0]).filter(Boolean)
+  const routineStreak    = computeStreak(routineDates)
+
+  // ── Tasks ──
+  const doneTasks       = raw.tasks.filter(t => t.status === 'done')
+  const doneInPeriod    = doneTasks.filter(t => inPeriod(t.updated_at)).length
+  const completionRate  = raw.tasks.length > 0
+    ? Math.round((doneTasks.length / raw.tasks.length) * 100) : 0
+  const liveProjects    = raw.projects.filter(p => p.status !== 'done').length
+
+  // ── Focus ──
+  const focusInPeriod  = raw.focus.filter(s => inPeriod(s.started_at))
+  const focusTotalMins = raw.focus.reduce((a, s) => a + (s.duration_min || 0), 0)
+  const focusPeriodMins = focusInPeriod.reduce((a, s) => a + (s.duration_min || 0), 0)
+  const avgFocus = focusInPeriod.length > 0
+    ? Math.round(focusPeriodMins / focusInPeriod.length) : 0
+
+  // ── Health ──
+  const healthInPeriod = raw.health.filter(h => inPeriod(h.date))
+  const waterHitsAll   = raw.health.filter(h => h.water_ml >= (h.water_goal_ml || 2000)).length
+  const healthDates    = raw.health.map(h => h.date).filter(Boolean)
+  const healthStreak   = computeStreak(healthDates)
+
+  // ── Hobbies ──
+  const totalHobbyMins = raw.hobbies.reduce((a, h) => a + (h.total_minutes || 0), 0)
+  const matureCount    = raw.hobbies.filter(h => hobbyStage(h.total_minutes) === 'mature').length
+  const growingCount   = raw.hobbies.filter(h => ['growing', 'sapling'].includes(hobbyStage(h.total_minutes))).length
+
+  const PERIODS = [
+    { key: 'week',  label: 'Week'  },
+    { key: 'month', label: 'Month' },
+    { key: 'all',   label: 'All'   },
+  ]
+
+  return (
+    <div className="stats-section">
+      <div className="stats-header">
+        <span className="section-label">What you've built</span>
+        <div className="stats-period-tabs">
+          {PERIODS.map(p => (
+            <button key={p.key}
+              className={`stats-period-btn${period === p.key ? ' active' : ''}`}
+              onClick={() => setPeriod(p.key)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="stats-grid">
+
+        {/* Routines */}
+        <div className="stats-card sc-routines">
+          <div className="sc-head"><span>🔁</span> Routines</div>
+          <div className="sc-stats">
+            <div className="sc-stat">
+              <span className="sc-val">{routinesInPeriod.length}</span>
+              <span className="sc-lbl">done</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{routineMins > 0 ? fmtMins(routineMins) : '—'}</span>
+              <span className="sc-lbl">logged</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{routineStreak > 0 ? `🔥${routineStreak}` : '—'}</span>
+              <span className="sc-lbl">day streak</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Tasks */}
+        <div className="stats-card sc-tasks">
+          <div className="sc-head"><span>✅</span> Tasks</div>
+          <div className="sc-stats">
+            <div className="sc-stat">
+              <span className="sc-val">{period === 'all' ? doneTasks.length : doneInPeriod}</span>
+              <span className="sc-lbl">done</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{completionRate}%</span>
+              <span className="sc-lbl">rate</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{liveProjects}</span>
+              <span className="sc-lbl">projects</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Focus */}
+        <div className="stats-card sc-focus">
+          <div className="sc-head"><span>🎯</span> Focus</div>
+          <div className="sc-stats">
+            <div className="sc-stat">
+              <span className="sc-val">{focusInPeriod.length}</span>
+              <span className="sc-lbl">sessions</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{fmtMins(period === 'all' ? focusTotalMins : focusPeriodMins)}</span>
+              <span className="sc-lbl">total time</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{avgFocus > 0 ? `${avgFocus}m` : '—'}</span>
+              <span className="sc-lbl">avg length</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Health */}
+        <div className="stats-card sc-health">
+          <div className="sc-head"><span>💚</span> Health</div>
+          <div className="sc-stats">
+            <div className="sc-stat">
+              <span className="sc-val">{healthInPeriod.length}</span>
+              <span className="sc-lbl">days logged</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{waterHitsAll}</span>
+              <span className="sc-lbl">💧 goal hits</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{healthStreak > 0 ? `🔥${healthStreak}` : '—'}</span>
+              <span className="sc-lbl">day streak</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Hobbies — full width */}
+        <div className="stats-card sc-hobbies sc-wide">
+          <div className="sc-head"><span>🌳</span> Hobbies</div>
+          <div className="sc-stats">
+            <div className="sc-stat">
+              <span className="sc-val">{raw.hobbies.length}</span>
+              <span className="sc-lbl">active</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{fmtMins(totalHobbyMins)}</span>
+              <span className="sc-lbl">total time</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{matureCount}</span>
+              <span className="sc-lbl">🌳 mature</span>
+            </div>
+            <div className="sc-stat">
+              <span className="sc-val">{growingCount}</span>
+              <span className="sc-lbl">🌱 growing</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
 // ── Today section ──────────────────────────────────────────────
 function TodaySection({ userId }) {
   const [items,   setItems]   = useState([])
@@ -375,6 +623,9 @@ export default function Home({ userId }) {
         </div>
         <MissionLog userId={userId} />
       </div>
+
+      {/* ── Stats dashboard ── */}
+      <StatsGrid userId={userId} />
 
     </div>
   )

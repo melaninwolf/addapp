@@ -43,17 +43,21 @@ async function notify(title, body) {
     if (permission.display !== 'granted') {
       await LocalNotifications.requestPermissions()
     }
+    // Ensure channel exists (Android 8+ requirement)
+    await LocalNotifications.createChannel({
+      id: 'addapp-focus',
+      name: 'Focus Session Alerts',
+      importance: 5,
+      vibration: true,
+    }).catch(() => {})
     await LocalNotifications.schedule({
       notifications: [
         {
           title,
           body,
           id: Math.floor(Math.random() * 1000000),
-          schedule: { at: new Date(Date.now() + 100) },
-          sound: null,
-          attachments: null,
-          actionTypeId: '',
-          extra: null,
+          channelId: 'addapp-focus',
+          schedule: { at: new Date(Date.now() + 500) },
         },
       ],
     })

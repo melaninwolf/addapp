@@ -365,9 +365,131 @@
   text-align: center;
 }
 
+/* ── Stats dashboard ─────────────────────────────────────────── */
+.stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stats-period-tabs {
+  display: flex;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.stats-period-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  letter-spacing: 0.03em;
+}
+.stats-period-btn:hover { color: var(--text); }
+.stats-period-btn.active {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stats-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border2);
+  border-radius: 14px;
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sc-wide { grid-column: 1 / -1; }
+
+.sc-routines { border-left-color: #7c3aed; }
+.sc-tasks    { border-left-color: #10b981; }
+.sc-focus    { border-left-color: #f59e0b; }
+.sc-health   { border-left-color: #ef4444; }
+.sc-hobbies  { border-left-color: #3b82f6; }
+
+.sc-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+}
+
+.sc-stats {
+  display: flex;
+  gap: 0;
+}
+
+.sc-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.sc-stat + .sc-stat {
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+}
+
+.sc-val {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.stats-loading {
+  padding: 20px;
+  text-align: center;
+  color: var(--text3);
+  font-size: 13px;
+}
+
 /* ── Mobile tweaks ────────────────────────────────────────── */
 @media (max-width: 480px) {
   .home-title   { font-size: 22px; }
   .capture-btn  { padding: 7px 13px; font-size: 12px; }
   .orbit-fuel-label { width: 72px; }
+
+  .stats-grid { grid-template-columns: 1fr; }
+  .sc-wide    { grid-column: 1; }
+  .sc-val     { font-size: 18px; }
 }

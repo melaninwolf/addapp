@@ -283,6 +283,16 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
         LocalNotifications.requestPermissions()
       }
     })
+    // Create notification channel (required for Android 8+)
+    LocalNotifications.createChannel({
+      id: 'addapp-routines',
+      name: 'Routine Alerts',
+      description: 'Step and completion alerts for your routines',
+      importance: 5,  // IMPORTANCE_HIGH — shows heads-up popup
+      visibility: 1,  // PUBLIC
+      vibration: true,
+      lights: true,
+    }).catch(() => {}) // no-op on iOS / web
   }, [])
 
   useEffect(() => {
@@ -456,8 +466,9 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
           {
             title: `${currentName} is done`,
             body: `Next: ${nextName}`,
-            id: 2,
-            schedule: { at: new Date(Date.now() + 100) },
+            id: Math.floor(Math.random() * 100000),
+            channelId: 'addapp-routines',
+            schedule: { at: new Date(Date.now() + 500) },
           }
         ]
       })
@@ -479,9 +490,10 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
         notifications: [
           {
             title: `${routine.name} complete! 🎉`,
-            body: `You earned +${xp} XP. Tap to see your breakdown.`,
-            id: 3,
-            schedule: { at: new Date(Date.now() + 100) },
+            body: `You earned +${xp} XP. Tap to see your progress.`,
+            id: Math.floor(Math.random() * 100000),
+            channelId: 'addapp-routines',
+            schedule: { at: new Date(Date.now() + 500) },
           }
         ]
       })
@@ -718,8 +730,9 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
                   {
                     title: 'Test: Step done',
                     body: nextStep ? `Next: ${nextStep.name}` : 'Last step!',
-                    id: 99,
-                    schedule: { at: new Date(Date.now() + 100) },
+                    id: Math.floor(Math.random() * 100000),
+                    channelId: 'addapp-routines',
+                    schedule: { at: new Date(Date.now() + 500) },
                   }
                 ]
               })
