@@ -817,6 +817,109 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   )
 }
 
+// ─── ROUTINE TEMPLATES ────────────────────────────────────────────────────────
+const ROUTINE_TEMPLATES = [
+  {
+    emoji: '🌅', name: 'Morning Routine', type: 'routine', time: '07:00',
+    days: ['mon','tue','wed','thu','fri','sat','sun'],
+    desc: 'Start the day with intention',
+    steps: [
+      { name: 'Drink a glass of water', dur: 2 },
+      { name: 'Take medication', dur: 1 },
+      { name: 'Shower & get dressed', dur: 20 },
+      { name: 'Eat breakfast', dur: 15 },
+      { name: "Review today's top 3 tasks", dur: 5 },
+    ],
+  },
+  {
+    emoji: '🌙', name: 'Night Routine', type: 'routine', time: '21:30',
+    days: ['mon','tue','wed','thu','fri','sat','sun'],
+    desc: 'Wind down and prepare for tomorrow',
+    steps: [
+      { name: 'Phone away — no more screens', dur: 1 },
+      { name: 'Journal — 3 wins today', dur: 5 },
+      { name: "Lay out tomorrow's clothes", dur: 3 },
+      { name: 'Read (no screens)', dur: 20 },
+      { name: 'Lights out', dur: 1 },
+    ],
+  },
+  {
+    emoji: '💼', name: 'Work Focus Block', type: 'routine', time: '09:00',
+    days: ['mon','tue','wed','thu','fri'],
+    desc: 'Deep work setup — weekdays',
+    steps: [
+      { name: 'Clear inbox (time-box 10 min)', dur: 10 },
+      { name: "Plan top 3 priorities for today", dur: 5 },
+      { name: 'Close all tabs + silence notifications', dur: 2 },
+      { name: 'Start deep work timer (25 min)', dur: 25 },
+      { name: 'Short break — stretch or walk', dur: 5 },
+    ],
+  },
+  {
+    emoji: '🏃', name: 'Exercise Routine', type: 'routine', time: '07:30',
+    days: ['mon','wed','fri'],
+    desc: 'Movement 3× per week',
+    steps: [
+      { name: 'Warm up — dynamic stretches', dur: 5 },
+      { name: 'Main workout', dur: 30 },
+      { name: 'Cool down + stretch', dur: 10 },
+      { name: 'Hydrate + protein', dur: 5 },
+    ],
+  },
+  {
+    emoji: '🌿', name: 'Evening Wind Down', type: 'routine', time: '20:00',
+    days: ['mon','tue','wed','thu','fri','sat','sun'],
+    desc: 'Transition from work to rest',
+    steps: [
+      { name: 'No more work — close laptop', dur: 1 },
+      { name: 'Make herbal tea or warm drink', dur: 5 },
+      { name: 'Light movement or yoga', dur: 10 },
+      { name: 'Breathing exercise (4-7-8)', dur: 5 },
+      { name: 'Read or quiet hobby', dur: 20 },
+    ],
+  },
+  {
+    emoji: '🔄', name: 'Weekly Reset', type: 'routine', time: '18:00',
+    days: ['sun'],
+    desc: 'Sunday reset for the week ahead',
+    steps: [
+      { name: 'Clear desk and workspace', dur: 10 },
+      { name: "Review last week's tasks", dur: 10 },
+      { name: 'Plan this week — top goals', dur: 15 },
+      { name: 'Groceries + errands list', dur: 5 },
+      { name: 'Prep anything for Monday', dur: 10 },
+    ],
+  },
+]
+
+function TemplatesModal({ onSelect, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-sheet" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title-text">📋 Routine Templates</span>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body" style={{ gap: 8 }}>
+          <p style={{ fontSize: 13, color: 'var(--text2)', margin: '0 0 4px' }}>
+            Pick a template to get started — you can customize everything after importing.
+          </p>
+          {ROUTINE_TEMPLATES.map((t, i) => (
+            <button key={i} className="template-card" onClick={() => { onSelect(t); onClose() }}>
+              <span className="tc-emoji">{t.emoji}</span>
+              <div className="tc-body">
+                <div className="tc-name">{t.name}</div>
+                <div className="tc-desc">{t.desc} · {t.steps.length} steps · {t.steps.reduce((a, s) => a + s.dur, 0)} min</div>
+              </div>
+              <span className="tc-arrow">→</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function Routines({ userId }) {
   const navigate = useNavigate()
@@ -824,6 +927,7 @@ export default function Routines({ userId }) {
   const [dbLoading, setDbLoading] = useState(!!userId)
   const [modal, setModal] = useState(null) // null | 'new' | routine obj
   const [running, setRunning] = useState(null)
+  const [showTemplates, setShowTemplates] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // null | routine obj
   const [markDoneModal, setMarkDoneModal] = useState(null) // null | routine obj
   const [markDoneTime, setMarkDoneTime]   = useState('')
@@ -882,6 +986,18 @@ export default function Routines({ userId }) {
   async function deleteRoutine(id) {
     await supabase.from('routines').delete().eq('id', id)
     setRoutines(r => r.filter(x => x.id !== id))
+  }
+
+  async function duplicateRoutine(r) {
+    const { id, created_at, updated_at, ...rest } = r
+    const copy = { ...rest, name: `Copy of ${r.name}`, user_id: userId }
+    if (userId) {
+      const { data, error } = await supabase.from('routines').insert(copy).select().single()
+      if (!error && data) setRoutines(prev => [...prev, data])
+    } else {
+      // Sample mode — just add locally with a temp id
+      setRoutines(prev => [...prev, { ...copy, id: Date.now() }])
+    }
   }
 
   function openMarkDone(r) {
@@ -996,7 +1112,10 @@ export default function Routines({ userId }) {
             : <span className="stats-hint">Nothing done yet today — start a routine 🚀</span>
           }
         </span>
-        <button className="btn-primary btn-sm" onClick={() => setModal('new')}>+ New routine</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-ghost btn-sm" onClick={() => setShowTemplates(true)}>📋 Templates</button>
+          <button className="btn-primary btn-sm" onClick={() => setModal('new')}>+ New routine</button>
+        </div>
       </div>
 
       {routines.length === 0 ? (
@@ -1046,6 +1165,7 @@ export default function Routines({ userId }) {
             <div className="rc-actions">
               <button className="btn-primary btn-sm" onClick={() => setRunning(r)}>▶ Start</button>
               <button className="btn-ghost btn-sm" onClick={() => setModal(r)}>Edit</button>
+              <button className="btn-ghost btn-sm" onClick={() => duplicateRoutine(r)} title="Duplicate routine">⧉ Copy</button>
               {!isDoneToday && (
                 <button className="btn-ghost btn-sm" onClick={() => openMarkDone(r)}>✓ Mark done</button>
               )}
@@ -1074,6 +1194,16 @@ export default function Routines({ userId }) {
           </>
         )
       })()}
+
+      {showTemplates && (
+        <TemplatesModal
+          onSelect={t => {
+            // Pre-fill the RoutineModal with template data (no id = new)
+            setModal({ ...t, steps: t.steps.map((s, i) => ({ ...s, id: i + 1 })) })
+          }}
+          onClose={() => setShowTemplates(false)}
+        />
+      )}
 
       {modal && (
         <RoutineModal

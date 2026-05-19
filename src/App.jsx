@@ -10,6 +10,7 @@ import ProjectDetail from './pages/ProjectDetail.jsx'
 import FocusSession  from './pages/FocusSession.jsx'
 import Journal       from './pages/Journal.jsx'
 import Hobbies       from './pages/Hobbies.jsx'
+import UsageTracker  from './pages/UsageTracker.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -267,6 +268,13 @@ function AppShell({ user }) {
             <span className="nav-icon">🌳</span>
             {showFull && <span>Hobbies</span>}
           </NavLink>
+
+          <NavLink to="/usage"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Screen Time' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">📱</span>
+            {showFull && <span>Screen Time</span>}
+          </NavLink>
         </div>
 
         <div className="sb-action-btns">
@@ -350,6 +358,7 @@ function AppShell({ user }) {
           <Route path="/health"       element={<Health        userId={user?.id} />} />
           <Route path="/journal"      element={<Journal       userId={user?.id} />} />
           <Route path="/hobbies"     element={<Hobbies       userId={user?.id} />} />
+          <Route path="/usage"        element={<UsageTracker  userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />

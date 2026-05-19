@@ -797,12 +797,254 @@ function YearAtAGlance({ year, onYearChange, onSelectDate, loggedDates = new Set
 }
 
 // ── Stub ──────────────────────────────────────────────────────
-function StubView({ title, icon }) {
+// ── Quarterly helpers ─────────────────────────────────────────
+function getQuarterNum(date) { return Math.floor(date.getMonth() / 3) + 1 }
+function quarterKey(year, q)  { return `${year}-Q${q}` }
+function quarterRange(year, q) {
+  const sm = (q - 1) * 3
+  return {
+    start:  new Date(year, sm, 1),
+    end:    new Date(year, sm + 3, 0, 23, 59, 59),
+    months: [sm, sm + 1, sm + 2],
+  }
+}
+function fmtQMins(m) {
+  if (!m) return '0'
+  const h = Math.floor(m / 60), rem = m % 60
+  if (h === 0) return `${rem}m`
+  return rem === 0 ? `${h}h` : `${h}h ${rem}m`
+}
+
+const Q_LABELS = ['', 'Q1', 'Q2', 'Q3', 'Q4']
+const Q_RANGES = ['', 'Jan–Mar', 'Apr–Jun', 'Jul–Sep', 'Oct–Dec']
+
+// ── QuarterlyView ──────────────────────────────────────────────
+function QuarterlyView({ userId, loggedDates }) {
+  const now = new Date()
+  const [year, setYear]       = useState(now.getFullYear())
+  const [q,    setQ]          = useState(getQuarterNum(now))
+  const [entry,      setEntry]      = useState(null)
+  const [saving,     setSaving]     = useState(false)
+  const [theme,      setTheme]      = useState('')
+  const [goals,      setGoals]      = useState([
+    { text: '', done: false }, { text: '', done: false }, { text: '', done: false },
+  ])
+  const [wins,       setWins]       = useState('')
+  const [challenges, setChallenges] = useState('')
+  const [learnings,  setLearnings]  = useState('')
+  const [nextQ,      setNextQ]      = useState('')
+  const [stats,      setStats]      = useState(null)
+
+  const key = quarterKey(year, q)
+  const { start, end, months } = quarterRange(year, q)
+
+  useEffect(() => { loadEntry() }, [key, userId]) // eslint-disable-line
+
+  async function loadEntry() {
+    if (!userId) return
+    setStats(null)
+    const { data } = await supabase.from('journal_quarterly_reviews')
+      .select('*').eq('user_id', userId).eq('quarter', key).maybeSingle()
+    if (data) {
+      setEntry(data)
+      setTheme(data.theme || '')
+      setGoals(data.goals?.length ? data.goals : [
+        { text: '', done: false }, { text: '', done: false }, { text: '', done: false },
+      ])
+      setWins(data.wins || '')
+      setChallenges(data.challenges || '')
+      setLearnings(data.learnings || '')
+      setNextQ(data.next_quarter || '')
+    } else {
+      setEntry(null); setTheme(''); setWins(''); setChallenges(''); setLearnings(''); setNextQ('')
+      setGoals([{ text: '', done: false }, { text: '', done: false }, { text: '', done: false }])
+    }
+    // Load quarter stats from DB
+    const si = start.toISOString(), ei = end.toISOString()
+    const sd = start.toISOString().split('T')[0], ed = end.toISOString().split('T')[0]
+    const [rLogs, tasks, focus, journal] = await Promise.all([
+      supabase.from('routine_logs').select('id').eq('user_id', userId)
+        .eq('status', 'completed').gte('started_at', si).lte('started_at', ei),
+      supabase.from('tasks').select('id').eq('user_id', userId)
+        .eq('status', 'done').gte('updated_at', si).lte('updated_at', ei),
+      supabase.from('focus_sessions').select('duration_min').eq('user_id', userId)
+        .gte('started_at', si).lte('started_at', ei),
+      supabase.from('journal_days').select('id').eq('user_id', userId)
+        .gte('entry_date', sd).lte('entry_date', ed),
+    ])
+    setStats({
+      routines:    rLogs.data?.length   || 0,
+      tasks:       tasks.data?.length   || 0,
+      focusMins:   (focus.data || []).reduce((a, s) => a + (s.duration_min || 0), 0),
+      journalDays: journal.data?.length || 0,
+    })
+  }
+
+  async function save() {
+    if (!userId || saving) return
+    setSaving(true)
+    const payload = {
+      user_id: userId, quarter: key,
+      theme, goals, wins, challenges, learnings, next_quarter: nextQ,
+      updated_at: new Date().toISOString(),
+    }
+    if (entry) {
+      const { data } = await supabase.from('journal_quarterly_reviews')
+        .update(payload).eq('id', entry.id).select().single()
+      if (data) setEntry(data)
+    } else {
+      const { data } = await supabase.from('journal_quarterly_reviews')
+        .insert(payload).select().single()
+      if (data) setEntry(data)
+    }
+    setSaving(false)
+  }
+
+  function navQ(dir) {
+    if (dir === -1) { if (q === 1) { setYear(y => y - 1); setQ(4) } else setQ(v => v - 1) }
+    else            { if (q === 4) { setYear(y => y + 1); setQ(1) } else setQ(v => v + 1) }
+  }
+
+  const todayDs = now.toISOString().split('T')[0]
+
   return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'50vh',flexDirection:'column',gap:12}}>
-      <div style={{fontSize:42}}>{icon}</div>
-      <div style={{fontSize:16,fontWeight:700,color:'var(--text)'}}>{title}</div>
-      <div style={{fontSize:13,color:'var(--text3)'}}>Coming in the next update</div>
+    <div className="qr-page">
+      {/* Header */}
+      <div className="entry-header">
+        <div>
+          <div className="entry-date" style={{ fontSize: 18 }}>Quarterly Planner</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 3 }}>
+            {Q_LABELS[q]} {year} · {Q_RANGES[q]}
+          </div>
+        </div>
+        <button className="btn-primary entry-save-btn" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : entry ? 'Update' : 'Save quarter'}
+        </button>
+      </div>
+
+      {/* Quarter nav */}
+      <div className="qr-nav">
+        <button className="cal-nav-btn" onClick={() => navQ(-1)}>‹</button>
+        {[1, 2, 3, 4].map(n => (
+          <button key={n} className={`qr-tab${q === n ? ' active' : ''}`} onClick={() => setQ(n)}>
+            {Q_LABELS[n]}
+            <span className="qr-tab-range">{Q_RANGES[n]}</span>
+          </button>
+        ))}
+        <button className="cal-nav-btn" onClick={() => navQ(1)}>›</button>
+        <span className="monthly-year-label">{year}</span>
+      </div>
+
+      {/* Stats strip */}
+      {stats && (
+        <div className="qr-stats-strip">
+          <div className="qr-stat">
+            <span className="qr-stat-val">{stats.routines}</span>
+            <span className="qr-stat-lbl">routines done</span>
+          </div>
+          <div className="qr-stat">
+            <span className="qr-stat-val">{stats.tasks}</span>
+            <span className="qr-stat-lbl">tasks done</span>
+          </div>
+          <div className="qr-stat">
+            <span className="qr-stat-val">{fmtQMins(stats.focusMins)}</span>
+            <span className="qr-stat-lbl">focus time</span>
+          </div>
+          <div className="qr-stat">
+            <span className="qr-stat-val">{stats.journalDays}</span>
+            <span className="qr-stat-lbl">days journaled</span>
+          </div>
+        </div>
+      )}
+
+      {/* 3 mini-month calendars */}
+      <div className="qr-months-row">
+        {months.map(mi => {
+          const dim  = daysInMonth(year, mi)
+          const fdow = firstDayOfMonth(year, mi)
+          const cells = []
+          for (let i = 0; i < fdow; i++) cells.push(null)
+          for (let d = 1; d <= dim; d++) cells.push(d)
+          return (
+            <div key={mi} className="qr-mini-month">
+              <div className="qr-mini-head">{MONTH_NAMES[mi]}</div>
+              <div className="qr-mini-grid">
+                {DAY_LABELS.map(dl => <div key={dl} className="qr-mini-dow">{dl}</div>)}
+                {cells.map((d, i) => {
+                  if (!d) return <div key={`e-${i}`} />
+                  const ds = `${year}-${String(mi + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                  const isLogged = loggedDates.has(ds)
+                  const isToday  = ds === todayDs
+                  const isFuture = ds > todayDs
+                  return (
+                    <div key={ds} className={
+                      `qr-mini-day${isLogged ? ' logged' : ''}${isToday ? ' today' : ''}${isFuture ? ' future' : ''}`
+                    }>{d}</div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Theme */}
+      <div className="monthly-section">
+        <div className="journal-col-title">🌟 Theme for this quarter</div>
+        <input className="journal-input" value={theme}
+          onChange={e => setTheme(e.target.value)}
+          placeholder="One word or phrase that anchors this quarter…" />
+      </div>
+
+      {/* Goals */}
+      <div className="monthly-section">
+        <div className="journal-col-title">🎯 3 Goals for {Q_LABELS[q]} {year}</div>
+        <div className="qr-goals">
+          {goals.map((g, i) => (
+            <div key={i} className="qr-goal-row">
+              <button
+                className={`qr-goal-check${g.done ? ' done' : ''}`}
+                onClick={() => setGoals(gs => gs.map((x, j) => j === i ? { ...x, done: !x.done } : x))}>
+                {g.done ? '✓' : i + 1}
+              </button>
+              <input className="journal-input" value={g.text}
+                style={g.done ? { textDecoration: 'line-through', opacity: 0.5 } : {}}
+                onChange={e => setGoals(gs => gs.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
+                placeholder={`Goal ${i + 1}…`} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Reflection grid */}
+      <div className="monthly-two-col">
+        <div className="monthly-section">
+          <div className="journal-col-title">🏆 Biggest wins</div>
+          <textarea className="journal-textarea" rows={5} value={wins}
+            onChange={e => setWins(e.target.value)}
+            placeholder="What are you most proud of this quarter?" />
+        </div>
+        <div className="monthly-section">
+          <div className="journal-col-title">⚡ Challenges faced</div>
+          <textarea className="journal-textarea" rows={5} value={challenges}
+            onChange={e => setChallenges(e.target.value)}
+            placeholder="What was hard? What did you struggle with?" />
+        </div>
+      </div>
+
+      <div className="monthly-section">
+        <div className="journal-col-title">💡 Key learnings</div>
+        <textarea className="journal-textarea" rows={4} value={learnings}
+          onChange={e => setLearnings(e.target.value)}
+          placeholder="What did you learn about yourself, your work, your patterns?" />
+      </div>
+
+      <div className="monthly-section">
+        <div className="journal-col-title">➡️ Carrying into next quarter</div>
+        <textarea className="journal-textarea" rows={4} value={nextQ}
+          onChange={e => setNextQ(e.target.value)}
+          placeholder="What intentions, habits, or focus areas do you want to take forward?" />
+      </div>
     </div>
   )
 }
@@ -1314,7 +1556,7 @@ export default function Journal({ userId }) {
           {view === 'daily'     && <DailyEntry key={selectedDate} date={selectedDate} userId={userId} healthLog={healthLog} onLogged={markLogged} onOpenMonthly={openMonthly} />}
           {view === 'weekly'    && <WeeklyView weekStart={weekStart} userId={userId} />}
           {view === 'monthly'   && <MonthlyPage month={monthlyMonth} onMonthChange={setMonthlyMonth} subView={monthlySubView} onSubViewChange={setMonthlySubView} userId={userId} />}
-          {view === 'quarterly' && <StubView title="Quarterly Planner" icon="🔷" />}
+          {view === 'quarterly' && <QuarterlyView userId={userId} loggedDates={loggedDates} />}
           {view === 'yearly'    && <YearAtAGlance year={yearlyYear} onYearChange={setYearlyYear} onSelectDate={openDaily} loggedDates={loggedDates} />}
         </div>
       </div>
