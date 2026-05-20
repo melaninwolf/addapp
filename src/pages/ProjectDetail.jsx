@@ -147,46 +147,51 @@ export default function ProjectDetail({ userId }) {
   }, [userId, id])
 
   const load = useCallback(async () => {
-    if (!userId || !id) return
-    const [projRes, msRes, taskRes] = await Promise.all([
-      supabase.from('projects').select('*').eq('id', id).eq('user_id', userId).single(),
-      supabase.from('milestones').select('*').eq('project_id', id).order('order_index'),
-      supabase.from('tasks').select('*').eq('project_id', id).eq('user_id', userId),
-    ])
-    // Load micro_milestones by milestone IDs (no project_id column on that table)
-    const msIds = (msRes.data || []).map(m => m.id)
-    let microData = []
-    if (msIds.length > 0) {
-      const { data } = await supabase.from('micro_milestones').select('*').in('milestone_id', msIds).order('order_index')
-      microData = data || []
-    }
-    const microMap = {}
-    for (const mm of microData) {
-      if (!microMap[mm.milestone_id]) microMap[mm.milestone_id] = []
-      microMap[mm.milestone_id].push(mm)
-    }
-    const milestones = (msRes.data || []).map(m => ({
-      ...m,
-      micro_milestones: microMap[m.id] || [],
-    }))
-    const proj = projRes.data
-    setProject(proj)
-    setMilestones(milestones)
-    setTasks(taskRes.data || [])
+    if (!userId || !id) { setLoading(false); return }
+    try {
+      const [projRes, msRes, taskRes] = await Promise.all([
+        supabase.from('projects').select('*').eq('id', id).eq('user_id', userId).single(),
+        supabase.from('milestones').select('*').eq('project_id', id).order('order_index'),
+        supabase.from('tasks').select('*').eq('project_id', id).eq('user_id', userId),
+      ])
+      // Load micro_milestones by milestone IDs (no project_id column on that table)
+      const msIds = (msRes.data || []).map(m => m.id)
+      let microData = []
+      if (msIds.length > 0) {
+        const { data } = await supabase.from('micro_milestones').select('*').in('milestone_id', msIds).order('order_index')
+        microData = data || []
+      }
+      const microMap = {}
+      for (const mm of microData) {
+        if (!microMap[mm.milestone_id]) microMap[mm.milestone_id] = []
+        microMap[mm.milestone_id].push(mm)
+      }
+      const milestones = (msRes.data || []).map(m => ({
+        ...m,
+        micro_milestones: microMap[m.id] || [],
+      }))
+      const proj = projRes.data
+      setProject(proj)
+      setMilestones(milestones)
+      setTasks(taskRes.data || [])
 
-    // Load all trigger-type routines for the selector
-    const { data: triggers } = await supabase
-      .from('routines').select('id, name, emoji, type')
-      .eq('user_id', userId).eq('type', 'trigger').order('name')
-    setTriggerRoutines(triggers || [])
+      // Load all trigger-type routines for the selector
+      const { data: triggers } = await supabase
+        .from('routines').select('id, name, emoji, type')
+        .eq('user_id', userId).eq('type', 'trigger').order('name')
+      setTriggerRoutines(triggers || [])
 
-    if (proj?.trigger_id) {
-      const found = (triggers || []).find(t => t.id === proj.trigger_id)
-      setTrigger(found || null)
-    } else {
-      setTrigger(null)
+      if (proj?.trigger_id) {
+        const found = (triggers || []).find(t => t.id === proj.trigger_id)
+        setTrigger(found || null)
+      } else {
+        setTrigger(null)
+      }
+    } catch (err) {
+      console.error('ProjectDetail load error:', err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [userId, id])
 
   useEffect(() => { load(); loadFocusSessions() }, [load, loadFocusSessions])
@@ -812,9 +817,6 @@ export default function ProjectDetail({ userId }) {
                 Visual mind map is coming soon.<br />
                 It will let you branch out ideas, connections, and notes for this project.
               </p>
-            </div>
-            <div className="modal-foot">
-              <button className="btn-ghost" onClick={() => setShowMindMap(false)}>Close</button>
             </div>
           </div>
         </div>
