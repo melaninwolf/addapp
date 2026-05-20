@@ -1,33 +1,63 @@
 // ─── Google Calendar integration ────────────────────────────────────────────
 //
 // Web:    GIS token model (popup) — works in browser.
-// Native: @capacitor/browser opens Chrome Custom Tabs for OAuth, then the
-//         deep-link com.mar.addapp://oauth2callback returns the token.
-//         This is the only approach that works inside Android WebView.
+// Native: @capacitor/browser opens Chrome Custom Tabs for OAuth (PKCE flow),
+//         then the deep-link com.mar.addapp://oauth2callback returns the code.
+//         The code is exchanged for an access + refresh token at the token
+//         endpoint — no client secret required for Desktop-type OAuth clients.
+//
+// Google Console setup required:
+//   Client type:          Desktop app  (not Web application)
+//   Authorized redirect:  com.mar.addapp://oauth2callback
 // ────────────────────────────────────────────────────────────────────────────
 
 import { Capacitor } from '@capacitor/core'
 
 const CLIENT_ID    = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const REDIRECT_URI = 'com.mar.addapp://oauth2callback'
+const TOKEN_URL    = 'https://oauth2.googleapis.com/token'
 
 export function isNativeApp() {
   return Capacitor.isNativePlatform()
 }
 
-// ── Scopes ───────────────────────────────────────────────────────────────────
-// To add write access later, change to:
-//   'https://www.googleapis.com/auth/calendar'
+// ── Scopes ──────────────────────────────────────────────────────────────────
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 
-// ── In-memory token cache ─────────────────────────────────────────────────────
-let _tokenClient  = null
-let _accessToken  = null
-let _tokenExpiry  = 0   // unix ms
+// ── In-memory token cache ────────────────────────────────────────────────────
+let _tokenClient = null
+let _accessToken = null
+let _tokenExpiry = 0   // unix ms
 
-// ── localStorage keys ─────────────────────────────────────────────────────────
-const LS_CONNECTED = 'gcal_connected'   // 'true' | absent
+// ── localStorage keys ────────────────────────────────────────────────────────
+const LS_CONNECTED     = 'gcal_connected'       // 'true' | absent
+const LS_REFRESH_TOKEN = 'gcal_refresh_token'   // stored after first native login
 
+// ── PKCE helpers ─────────────────────────────────────────────────────────────
+function _randomBytes(len) {
+  const arr = new Uint8Array(len)
+  crypto.getRandomValues(arr)
+  return arr
+}
+
+function _base64url(bytes) {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
+}
+
+function _generateVerifier() {
+  return _base64url(_randomBytes(32))
+}
+
+async function _generateChallenge(verifier) {
+  const data    = new TextEncoder().encode(verifier)
+  const digest  = await crypto.subtle.digest('SHA-256', data)
+  return _base64url(new Uint8Array(digest))
+}
+
+// ── GIS (web flow) ───────────────────────────────────────────────────────────
 /** Dynamically load the GIS script. Safe to call multiple times. */
 export function loadGIS() {
   if (window.google?.accounts) return Promise.resolve()
@@ -75,8 +105,7 @@ function _initTokenClient(prompt, callback) {
 }
 
 /**
- * First-time connect: shows the Google OAuth popup.
- * Saves the "connected" flag to localStorage on success.
+ * Web flow: shows the Google OAuth popup.
  */
 export function connectGoogle(onToken, onError) {
   if (!CLIENT_ID || CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE') {
@@ -96,11 +125,12 @@ export function connectGoogle(onToken, onError) {
 }
 
 /**
- * Native OAuth (Android / Capacitor).
- * Opens Chrome Custom Tabs → Google login → deep-link redirect back to app.
- * Requires @capacitor/browser and @capacitor/app to be installed.
- * The redirect URI com.mar.addapp://oauth2callback must be registered in
- * Google Cloud Console as an authorised redirect URI for this client.
+ * Native OAuth — PKCE authorization code flow via Chrome Custom Tabs.
+ *
+ * Requirements:
+ *   1. Google Console client type must be "Desktop app"
+ *   2. com.mar.addapp://oauth2callback added as Authorized redirect URI
+ *   3. AndroidManifest.xml intent filter for com.mar.addapp scheme (already done)
  */
 export async function connectGoogleNative(onToken, onError) {
   if (!CLIENT_ID || CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE') {
@@ -111,16 +141,24 @@ export async function connectGoogleNative(onToken, onError) {
     const { Browser } = await import(/* @vite-ignore */ '@capacitor/browser')
     const { App }     = await import(/* @vite-ignore */ '@capacitor/app')
 
+    // Generate PKCE verifier + challenge
+    const verifier   = _generateVerifier()
+    const challenge  = await _generateChallenge(verifier)
+    sessionStorage.setItem('gcal_pkce_verifier', verifier)
+
     const params = new URLSearchParams({
-      client_id:              CLIENT_ID,
-      redirect_uri:           REDIRECT_URI,
-      response_type:          'token',
-      scope:                  SCOPES,
-      include_granted_scopes: 'true',
+      client_id:             CLIENT_ID,
+      redirect_uri:          REDIRECT_URI,
+      response_type:         'code',
+      scope:                 SCOPES,
+      code_challenge:        challenge,
+      code_challenge_method: 'S256',
+      access_type:           'offline',   // request refresh token
+      prompt:                'consent',   // force consent to always get refresh_token
     })
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`
 
-    // Listen for the deep-link callback before opening the browser
+    // Register deep-link listener BEFORE opening browser
     const listener = await App.addListener('appUrlOpen', async (event) => {
       await listener.remove()
       try { await Browser.close() } catch (_) {}
@@ -131,17 +169,47 @@ export async function connectGoogleNative(onToken, onError) {
         return
       }
 
-      // Token lives in the URL fragment: #access_token=xxx&expires_in=3599
-      const fragment = url.includes('#') ? url.split('#')[1] : url.split('?')[1] || ''
-      const p        = new URLSearchParams(fragment)
-      const token    = p.get('access_token')
-      const expires  = parseInt(p.get('expires_in') || '3600')
+      // Code lives in query string: ?code=xxx&scope=...
+      const qs   = url.includes('?') ? url.split('?')[1] : ''
+      const p    = new URLSearchParams(qs)
+      const code = p.get('code')
 
-      if (!token) { onError('No access token in redirect — check Google Console redirect URIs'); return }
+      if (!code) {
+        const err = p.get('error') || 'No authorization code in redirect'
+        onError(err)
+        return
+      }
 
-      _saveToken(token, expires)
-      localStorage.setItem(LS_CONNECTED, 'true')
-      onToken(token)
+      // Exchange code for access + refresh tokens (no client secret for Desktop clients)
+      try {
+        const storedVerifier = sessionStorage.getItem('gcal_pkce_verifier') || verifier
+        const res = await fetch(TOKEN_URL, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            code,
+            client_id:     CLIENT_ID,
+            redirect_uri:  REDIRECT_URI,
+            grant_type:    'authorization_code',
+            code_verifier: storedVerifier,
+          }),
+        })
+        const data = await res.json()
+
+        if (data.error) {
+          onError(`Token exchange failed: ${data.error_description || data.error}`)
+          return
+        }
+
+        _saveToken(data.access_token, data.expires_in)
+        if (data.refresh_token) {
+          localStorage.setItem(LS_REFRESH_TOKEN, data.refresh_token)
+        }
+        localStorage.setItem(LS_CONNECTED, 'true')
+        onToken(data.access_token)
+      } catch (fetchErr) {
+        onError(`Token exchange network error: ${fetchErr.message}`)
+      }
     })
 
     await Browser.open({ url: authUrl })
@@ -151,14 +219,45 @@ export async function connectGoogleNative(onToken, onError) {
 }
 
 /**
+ * Use a stored refresh token to get a new access token silently (native only).
+ */
+async function _refreshNativeToken(onToken, onFail) {
+  const refreshToken = localStorage.getItem(LS_REFRESH_TOKEN)
+  if (!refreshToken) { onFail(); return }
+
+  try {
+    const res = await fetch(TOKEN_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     CLIENT_ID,
+        refresh_token: refreshToken,
+        grant_type:    'refresh_token',
+      }),
+    })
+    const data = await res.json()
+    if (data.error || !data.access_token) { onFail(); return }
+    _saveToken(data.access_token, data.expires_in)
+    onToken(data.access_token)
+  } catch {
+    onFail()
+  }
+}
+
+/**
  * Silent re-auth — call on every Calendar mount if isConnected() is true.
- * No popup shown. Calls onToken with a fresh token, or onFail if the
- * user needs to reconnect manually (revoked access, not signed in to Google).
+ * On web:    uses GIS silent token request (no popup).
+ * On native: uses stored refresh token.
  */
 export function silentReconnect(onToken, onFail) {
   // Return cached token if still valid
   const cached = getCachedToken()
   if (cached) { onToken(cached); return }
+
+  if (isNativeApp()) {
+    _refreshNativeToken(onToken, onFail)
+    return
+  }
 
   if (!window.google?.accounts) { onFail(); return }
 
@@ -170,15 +269,21 @@ export function silentReconnect(onToken, onFail) {
 }
 
 /**
- * Disconnect: revoke token and clear the "connected" flag.
+ * Disconnect: revoke token and clear all stored state.
  */
 export function disconnectGoogle(token) {
   if (token && window.google?.accounts) {
     window.google.accounts.oauth2.revoke(token)
   }
+  const refreshToken = localStorage.getItem(LS_REFRESH_TOKEN)
+  if (refreshToken) {
+    // Best-effort revoke of refresh token too
+    fetch(`https://oauth2.googleapis.com/revoke?token=${refreshToken}`, { method: 'POST' }).catch(() => {})
+  }
   _accessToken = null
   _tokenExpiry  = 0
   localStorage.removeItem(LS_CONNECTED)
+  localStorage.removeItem(LS_REFRESH_TOKEN)
 }
 
 /**
