@@ -1,15 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { supabase } from '../supabase'
 import './UsageTracker.css'
 
+// ── Native plugin bridge (Android only) ───────────────────────
+const NativeUT = Capacitor.isNativePlatform()
+  ? registerPlugin('UsageTracker')
+  : null
+
 // ── Constants ─────────────────────────────────────────────────
 const CATEGORIES = [
-  { key: 'social',         label: 'Social',         emoji: '📱', color: '#f59e0b' },
-  { key: 'entertainment',  label: 'Entertainment',  emoji: '🎬', color: '#ef4444' },
-  { key: 'work',           label: 'Work',           emoji: '💼', color: '#3b82f6' },
-  { key: 'comms',          label: 'Comms',          emoji: '💬', color: '#10b981' },
-  { key: 'news',           label: 'News',           emoji: '📰', color: '#8b5cf6' },
-  { key: 'other',          label: 'Other',          emoji: '📌', color: '#6b7280' },
+  { key: 'social',        label: 'Social',        emoji: '📱', color: '#f59e0b' },
+  { key: 'entertainment', label: 'Entertainment', emoji: '🎬', color: '#ef4444' },
+  { key: 'work',          label: 'Work',          emoji: '💼', color: '#3b82f6' },
+  { key: 'comms',         label: 'Comms',         emoji: '💬', color: '#10b981' },
+  { key: 'news',          label: 'News',          emoji: '📰', color: '#8b5cf6' },
+  { key: 'other',         label: 'Other',         emoji: '📌', color: '#6b7280' },
 ]
 
 const QUICK_APPS = [
@@ -23,6 +30,17 @@ const QUICK_APPS = [
   { name: 'Slack',      category: 'comms',         emoji: '💬', distraction: false },
   { name: 'WhatsApp',   category: 'comms',         emoji: '📲', distraction: false },
   { name: 'News sites', category: 'news',          emoji: '📰', distraction: true  },
+]
+
+const BLOCKER_PRESETS = [
+  { name: 'TikTok',    pkg: 'com.zhiliaoapp.musically',  emoji: '🎵' },
+  { name: 'Instagram', pkg: 'com.instagram.android',     emoji: '📸' },
+  { name: 'YouTube',   pkg: 'com.google.android.youtube',emoji: '▶️' },
+  { name: 'Twitter/X', pkg: 'com.twitter.android',       emoji: '🐦' },
+  { name: 'Facebook',  pkg: 'com.facebook.katana',       emoji: '👍' },
+  { name: 'Snapchat',  pkg: 'com.snapchat.android',      emoji: '👻' },
+  { name: 'Reddit',    pkg: 'com.reddit.frontpage',      emoji: '🔶' },
+  { name: 'BeReal',    pkg: 'com.bereal.ft',             emoji: '📷' },
 ]
 
 const DURATION_PRESETS = [5, 10, 15, 20, 30, 45, 60, 90, 120]
@@ -52,7 +70,7 @@ function LogModal({ onSave, onClose, limits }) {
   const [customDur,   setCustomDur]   = useState('')
   const [distraction, setDistraction] = useState(false)
   const [note,        setNote]        = useState('')
-  const [step,        setStep]        = useState('app') // app | details
+  const [step,        setStep]        = useState('app')
 
   function selectQuickApp(qa) {
     setAppName(qa.name)
@@ -83,7 +101,6 @@ function LogModal({ onSave, onClose, limits }) {
           <span className="ut-modal-title">{step === 'app' ? 'What did you use?' : `Log · ${appName}`}</span>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-
         {step === 'app' && (
           <div className="ut-modal-body">
             <div className="ut-quick-grid">
@@ -104,10 +121,8 @@ function LogModal({ onSave, onClose, limits }) {
             </div>
           </div>
         )}
-
         {step === 'details' && (
           <div className="ut-modal-body">
-            {/* Duration */}
             <div className="ut-field">
               <label className="ut-label">How long?</label>
               <div className="ut-dur-grid">
@@ -123,8 +138,6 @@ function LogModal({ onSave, onClose, limits }) {
                 placeholder="Custom minutes…" value={customDur}
                 onChange={e => setCustomDur(e.target.value)} />
             </div>
-
-            {/* Category */}
             <div className="ut-field">
               <label className="ut-label">Category</label>
               <div className="ut-cat-row">
@@ -138,8 +151,6 @@ function LogModal({ onSave, onClose, limits }) {
                 ))}
               </div>
             </div>
-
-            {/* Distraction toggle */}
             <div className="ut-field">
               <label className="ut-label">Was this a distraction?</label>
               <div className="ut-toggle-row">
@@ -149,20 +160,16 @@ function LogModal({ onSave, onClose, limits }) {
                   onClick={() => setDistraction(true)}>⚠️ Distraction</button>
               </div>
             </div>
-
-            {/* Note */}
             <div className="ut-field">
               <label className="ut-label">Note (optional)</label>
               <input className="ut-input" placeholder="e.g. mindless scroll before bed…"
                 value={note} onChange={e => setNote(e.target.value)} />
             </div>
-
             {overLimit && (
               <div className="ut-over-limit">
                 ⚠️ Over your {fmtMins(limit.daily_limit_min)} daily limit for {appName}
               </div>
             )}
-
             <div className="ut-modal-foot">
               <button className="btn-ghost btn-sm" onClick={() => setStep('app')}>← Back</button>
               <button className="btn-primary" onClick={submit} disabled={!finalDur}>
@@ -231,10 +238,214 @@ function LimitModal({ onSave, onClose }) {
   )
 }
 
+// ── Add Blocker modal ─────────────────────────────────────────
+function AddBlockerModal({ onSave, onClose }) {
+  const [step,        setStep]        = useState('pick')   // pick | details
+  const [appName,     setAppName]     = useState('')
+  const [pkg,         setPkg]         = useState('')
+  const [emoji,       setEmoji]       = useState('📱')
+  const [limitMins,   setLimitMins]   = useState(10)
+  const [customLimit, setCustomLimit] = useState('')
+  const [goal,        setGoal]        = useState('')
+
+  function pickPreset(p) {
+    setAppName(p.name)
+    setPkg(p.pkg)
+    setEmoji(p.emoji)
+    setStep('details')
+  }
+
+  function pickCustom() {
+    if (!appName.trim()) return
+    setStep('details')
+  }
+
+  const finalLimit = customLimit !== '' ? parseInt(customLimit) || limitMins : limitMins
+
+  function submit() {
+    if (!appName.trim() || !goal.trim()) return
+    onSave({
+      app_name:            appName.trim(),
+      package_name:        pkg.trim(),
+      emoji,
+      daily_limit_minutes: finalLimit,
+      major_goal:          goal.trim(),
+    })
+  }
+
+  return (
+    <div className="ut-overlay" onClick={onClose}>
+      <div className="ut-modal" onClick={e => e.stopPropagation()}>
+        <div className="ut-modal-head">
+          <span className="ut-modal-title">
+            {step === 'pick' ? 'Which app distracts you?' : `🚨 Block ${appName}`}
+          </span>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {step === 'pick' && (
+          <div className="ut-modal-body">
+            <div className="ut-quick-grid">
+              {BLOCKER_PRESETS.map(p => (
+                <button key={p.name} className="ut-quick-btn" onClick={() => pickPreset(p)}>
+                  <span style={{ fontSize: 22 }}>{p.emoji}</span>
+                  <span className="ut-quick-name">{p.name}</span>
+                </button>
+              ))}
+            </div>
+            <div className="ut-custom-row">
+              <input className="ut-input" placeholder="Other app name…"
+                value={appName} onChange={e => setAppName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && pickCustom()} />
+              <button className="btn-primary btn-sm" onClick={pickCustom} disabled={!appName.trim()}>
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'details' && (
+          <div className="ut-modal-body">
+            {/* Major goal — first and most prominent */}
+            <div className="ut-field">
+              <label className="ut-label">🎯 What should you be doing instead?</label>
+              <input className="ut-input ut-goal-input"
+                placeholder="e.g. Finish my side project, Study for exams…"
+                value={goal} onChange={e => setGoal(e.target.value)} autoFocus />
+              <span className="ut-field-hint">This is what we'll shame you with when you go over your limit.</span>
+            </div>
+
+            {/* Daily limit */}
+            <div className="ut-field">
+              <label className="ut-label">Daily time limit</label>
+              <div className="ut-dur-grid">
+                {[5, 10, 15, 20, 30, 45, 60].map(d => (
+                  <button key={d}
+                    className={`ut-dur-btn${limitMins === d && customLimit === '' ? ' active' : ''}`}
+                    onClick={() => { setLimitMins(d); setCustomLimit('') }}>
+                    {fmtMins(d)}
+                  </button>
+                ))}
+              </div>
+              <input className="ut-input ut-dur-custom" type="number" min="1" max="480"
+                placeholder="Custom minutes…" value={customLimit}
+                onChange={e => setCustomLimit(e.target.value)} />
+            </div>
+
+            {/* Package name (optional, for native tracking) */}
+            {Capacitor.isNativePlatform() && (
+              <div className="ut-field">
+                <label className="ut-label">Android package name (auto-filled for presets)</label>
+                <input className="ut-input" placeholder="e.g. com.zhiliaoapp.musically"
+                  value={pkg} onChange={e => setPkg(e.target.value)} />
+                <span className="ut-field-hint">Required for automatic detection.</span>
+              </div>
+            )}
+
+            <div className="ut-modal-foot">
+              <button className="btn-ghost btn-sm" onClick={() => setStep('pick')}>← Back</button>
+              <button className="btn-primary" onClick={submit}
+                disabled={!appName.trim() || !goal.trim()}>
+                Add blocker
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Shame Screen ──────────────────────────────────────────────
+function ShameScreen({ session, tasks, routines, shameHistory, onDismiss, onGoToTasks }) {
+  const overBy = (session.minutesUsed || 0) - (session.limitMinutes || 0)
+  const timesThisWeek = shameHistory.filter(s => s.app_name === session.appName).length
+
+  return (
+    <div className="shame-overlay">
+      <div className="shame-content">
+
+        {/* App icon + headline */}
+        <div className="shame-hero">
+          <div className="shame-emoji">{session.emoji || '📱'}</div>
+          <h1 className="shame-headline">{session.appName} just stole your time</h1>
+          <div className="shame-time-badge">
+            <span className="shame-time-val">{session.minutesUsed} min</span>
+            <span className="shame-time-sub">
+              {overBy > 0 ? `${overBy} min over your ${session.limitMinutes}-min limit` : `at your ${session.limitMinutes}-min limit`}
+            </span>
+          </div>
+        </div>
+
+        {/* Major goal */}
+        {session.majorGoal && (
+          <div className="shame-goal-block">
+            <div className="shame-goal-label">Instead, you could have been working on:</div>
+            <div className="shame-goal-text">🎯 {session.majorGoal}</div>
+          </div>
+        )}
+
+        {/* Unfinished tasks */}
+        {tasks.length > 0 && (
+          <div className="shame-section">
+            <div className="shame-section-title">Your unfinished tasks right now</div>
+            <ul className="shame-list">
+              {tasks.slice(0, 5).map(t => (
+                <li key={t.id} className="shame-list-item">
+                  <span className="shame-dot" />
+                  <span>{t.title}</span>
+                </li>
+              ))}
+              {tasks.length > 5 && (
+                <li className="shame-list-more">+ {tasks.length - 5} more tasks waiting…</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Incomplete routines */}
+        {routines.length > 0 && (
+          <div className="shame-section">
+            <div className="shame-section-title">Today's routines not done yet</div>
+            <ul className="shame-list">
+              {routines.map(r => (
+                <li key={r.id} className="shame-list-item">
+                  <span className="shame-dot shame-dot-routine" />
+                  <span>{r.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Streak */}
+        {timesThisWeek > 0 && (
+          <div className="shame-streak">
+            📊 Caught on {session.appName} <strong>{timesThisWeek} time{timesThisWeek !== 1 ? 's' : ''}</strong> this week
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="shame-actions">
+          <button className="shame-btn-back" onClick={onDismiss}>
+            😓 Ok, I'm back
+          </button>
+          {tasks.length > 0 && (
+            <button className="shame-btn-tasks" onClick={onGoToTasks}>
+              → Go to Tasks
+            </button>
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
 // ── Bar chart ─────────────────────────────────────────────────
 function UsageBar({ label, emoji, mins, limitMins, color }) {
-  const pct    = limitMins ? Math.min((mins / limitMins) * 100, 100) : 0
-  const over   = limitMins && mins > limitMins
+  const pct  = limitMins ? Math.min((mins / limitMins) * 100, 100) : 0
+  const over = limitMins && mins > limitMins
   return (
     <div className="ut-bar-row">
       <div className="ut-bar-info">
@@ -245,10 +456,7 @@ function UsageBar({ label, emoji, mins, limitMins, color }) {
       </div>
       {limitMins > 0 && (
         <div className="ut-bar-track">
-          <div className="ut-bar-fill" style={{
-            width: `${pct}%`,
-            background: over ? '#ef4444' : color,
-          }} />
+          <div className="ut-bar-fill" style={{ width: `${pct}%`, background: over ? '#ef4444' : color }} />
         </div>
       )}
     </div>
@@ -257,29 +465,221 @@ function UsageBar({ label, emoji, mins, limitMins, color }) {
 
 // ── Main page ─────────────────────────────────────────────────
 export default function UsageTracker({ userId }) {
+  const navigate = useNavigate()
+
+  // Manual log state
   const [date,         setDate]         = useState(todayStr())
   const [logs,         setLogs]         = useState([])
   const [limits,       setLimits]       = useState([])
   const [showLog,      setShowLog]      = useState(false)
   const [showLimit,    setShowLimit]    = useState(false)
-  const [activeTab,    setActiveTab]    = useState('today') // today | week | limits
+  const [activeTab,    setActiveTab]    = useState('blockers')
 
-  useEffect(() => { loadAll() }, [userId, date]) // eslint-disable-line
+  // Blocker state
+  const [blockers,      setBlockers]      = useState([])
+  const [nativeUsage,   setNativeUsage]   = useState({})     // pkg → minutes
+  const [permGranted,   setPermGranted]   = useState(false)
+  const [isTracking,    setIsTracking]    = useState(false)
+  const [showAddBlocker,setShowAddBlocker]= useState(false)
+  const [trackLoading,  setTrackLoading]  = useState(false)
+
+  // Shame state
+  const [shameSession,   setShameSession]   = useState(null)   // current shame to show
+  const [shameTasks,     setShameTasks]     = useState([])
+  const [shameRoutines,  setShameRoutines]  = useState([])
+  const [shameHistory,   setShameHistory]   = useState([])
+
+  // ── Load everything on mount ──────────────────────────────
+  useEffect(() => {
+    if (!userId) return
+    loadAll()
+    if (Capacitor.isNativePlatform()) {
+      checkNativePermission()
+      checkTrackingStatus()
+    }
+  }, [userId])
+
+  // ── Detect app coming back to foreground ──────────────────
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        checkPendingShame()
+        loadNativeUsage()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [userId, blockers])
 
   async function loadAll() {
-    if (!userId) return
-    const now  = new Date()
-    const wks  = new Date(now); wks.setDate(now.getDate() - 6)
-    const [logsRes, limitsRes] = await Promise.all([
+    const now = new Date()
+    const wks = new Date(now); wks.setDate(now.getDate() - 6)
+    const [logsRes, limitsRes, blockersRes] = await Promise.all([
       supabase.from('usage_logs').select('*').eq('user_id', userId)
         .gte('log_date', wks.toISOString().split('T')[0])
         .order('created_at', { ascending: false }),
       supabase.from('usage_limits').select('*').eq('user_id', userId).eq('is_active', true),
+      supabase.from('distraction_apps').select('*').eq('user_id', userId).eq('is_active', true)
+        .order('created_at', { ascending: true }),
     ])
     setLogs(logsRes.data || [])
     setLimits(limitsRes.data || [])
+    setBlockers(blockersRes.data || [])
+    if (Capacitor.isNativePlatform() && blockersRes.data?.length) {
+      loadNativeUsage(blockersRes.data)
+    }
   }
 
+  async function checkNativePermission() {
+    try {
+      const res = await NativeUT?.checkUsagePermission()
+      setPermGranted(res?.granted === true)
+    } catch {}
+  }
+
+  async function checkTrackingStatus() {
+    try {
+      const res = await NativeUT?.isTracking()
+      setIsTracking(res?.active === true)
+    } catch {}
+  }
+
+  async function loadNativeUsage(appsOverride) {
+    const apps = appsOverride || blockers
+    if (!apps.length || !NativeUT) return
+    const usageMap = {}
+    await Promise.all(apps.map(async app => {
+      if (!app.package_name) return
+      try {
+        const res = await NativeUT.getTodayUsageMinutes({ packageName: app.package_name })
+        if (res?.minutes >= 0) usageMap[app.package_name] = res.minutes
+      } catch {}
+    }))
+    setNativeUsage(usageMap)
+  }
+
+  async function checkPendingShame() {
+    if (!NativeUT || !userId) return
+    try {
+      const res = await NativeUT.getPendingShameData()
+      const sessions = res?.sessions || []
+      if (sessions.length === 0) return
+
+      // Load context for the first session
+      const first = sessions[0]
+      await loadShameContext()
+
+      // Record to Supabase
+      const blocker = blockers.find(b => b.app_name === first.appName)
+      await supabase.from('shame_sessions').insert({
+        user_id:       userId,
+        app_id:        blocker?.id || null,
+        app_name:      first.appName,
+        minutes_used:  first.minutesUsed,
+        limit_minutes: first.limitMinutes,
+      })
+
+      // Load shame history
+      const { data: hist } = await supabase.from('shame_sessions')
+        .select('app_name, shamed_at')
+        .eq('user_id', userId)
+        .gte('shamed_at', new Date(Date.now() - 7 * 86400000).toISOString())
+      setShameHistory(hist || [])
+
+      setShameSession({
+        appName:      first.appName,
+        minutesUsed:  first.minutesUsed,
+        limitMinutes: first.limitMinutes,
+        majorGoal:    first.majorGoal || blocker?.major_goal || '',
+        emoji:        first.emoji || blocker?.emoji || '📱',
+      })
+
+      await NativeUT.clearPendingShameData()
+    } catch (err) {
+      console.error('checkPendingShame error', err)
+    }
+  }
+
+  async function loadShameContext() {
+    if (!userId) return
+    const today = todayStr()
+    const [tasksRes, routinesRes] = await Promise.all([
+      supabase.from('tasks').select('id, title')
+        .eq('user_id', userId).neq('status', 'done')
+        .order('created_at', { ascending: true }).limit(20),
+      supabase.from('routines').select('id, name').eq('user_id', userId)
+        .not('id', 'in', `(select routine_id from routine_logs where user_id='${userId}' and log_date='${today}' and status='done')`)
+        .limit(10),
+    ])
+    setShameTasks(tasksRes.data || [])
+    setShameRoutines(routinesRes.data || [])
+  }
+
+  // ── Tracking controls ─────────────────────────────────────
+  async function enableTracking() {
+    if (!permGranted) {
+      await NativeUT?.requestUsagePermission()
+      setTimeout(() => checkNativePermission(), 2000)
+      return
+    }
+    if (!blockers.length) { setShowAddBlocker(true); return }
+
+    setTrackLoading(true)
+    try {
+      const apps = blockers.map(b => ({
+        id:           b.id,
+        packageName:  b.package_name,
+        appName:      b.app_name,
+        limitMinutes: b.daily_limit_minutes,
+        majorGoal:    b.major_goal || '',
+        emoji:        b.emoji || '📱',
+      }))
+      await NativeUT?.startTracking({ apps })
+      setIsTracking(true)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setTrackLoading(false)
+    }
+  }
+
+  async function disableTracking() {
+    setTrackLoading(true)
+    try {
+      await NativeUT?.stopTracking()
+      setIsTracking(false)
+    } catch {} finally {
+      setTrackLoading(false)
+    }
+  }
+
+  // ── Blocker CRUD ──────────────────────────────────────────
+  async function saveBlocker(payload) {
+    if (!userId) return
+    const { data } = await supabase.from('distraction_apps')
+      .insert({ ...payload, user_id: userId })
+      .select().single()
+    if (data) {
+      const updated = [...blockers, data]
+      setBlockers(updated)
+      if (isTracking) {
+        const apps = updated.map(b => ({
+          id: b.id, packageName: b.package_name, appName: b.app_name,
+          limitMinutes: b.daily_limit_minutes, majorGoal: b.major_goal || '', emoji: b.emoji || '📱',
+        }))
+        await NativeUT?.startTracking({ apps })
+      }
+    }
+    setShowAddBlocker(false)
+  }
+
+  async function deleteBlocker(id) {
+    await supabase.from('distraction_apps').delete().eq('id', id)
+    setBlockers(prev => prev.filter(b => b.id !== id))
+  }
+
+  // ── Manual log CRUD ───────────────────────────────────────
   async function saveLog(payload) {
     if (!userId) return
     await supabase.from('usage_logs').insert({ ...payload, user_id: userId, log_date: date })
@@ -307,57 +707,57 @@ export default function UsageTracker({ userId }) {
     setLimits(prev => prev.filter(l => l.id !== id))
   }
 
-  // ── Derived: today's stats ──
-  const todayLogs = logs.filter(l => l.log_date === date)
-  const todayTotal = todayLogs.reduce((a, l) => a + l.duration_min, 0)
+  // ── Derived: manual log stats ─────────────────────────────
+  const todayLogs        = logs.filter(l => l.log_date === date)
+  const todayTotal       = todayLogs.reduce((a, l) => a + l.duration_min, 0)
   const todayDistraction = todayLogs.filter(l => l.is_distraction).reduce((a, l) => a + l.duration_min, 0)
-
-  // Group today by app for bar chart
   const appTotals = {}
   todayLogs.forEach(l => {
     if (!appTotals[l.app_name]) appTotals[l.app_name] = { mins: 0, category: l.category }
     appTotals[l.app_name].mins += l.duration_min
   })
-
-  // ── Derived: week stats ──
-  const weekLogs = logs
-  const weekTotal = weekLogs.reduce((a, l) => a + l.duration_min, 0)
-  const weekDistraction = weekLogs.filter(l => l.is_distraction).reduce((a, l) => a + l.duration_min, 0)
-
-  // Group by day for week
+  const weekLogs         = logs
+  const weekTotal        = weekLogs.reduce((a, l) => a + l.duration_min, 0)
+  const weekDistraction  = weekLogs.filter(l => l.is_distraction).reduce((a, l) => a + l.duration_min, 0)
   const weekByDay = {}
-  weekLogs.forEach(l => {
-    if (!weekByDay[l.log_date]) weekByDay[l.log_date] = 0
-    weekByDay[l.log_date] += l.duration_min
-  })
+  weekLogs.forEach(l => { weekByDay[l.log_date] = (weekByDay[l.log_date] || 0) + l.duration_min })
   const maxDayMins = Math.max(...Object.values(weekByDay), 1)
-
-  // Group by category for week
   const weekByCat = {}
-  weekLogs.forEach(l => {
-    if (!weekByCat[l.category]) weekByCat[l.category] = 0
-    weekByCat[l.category] += l.duration_min
-  })
-
+  weekLogs.forEach(l => { weekByCat[l.category] = (weekByCat[l.category] || 0) + l.duration_min })
   const days7 = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (6 - i))
     return d.toISOString().split('T')[0]
   })
 
+  // ── Render ────────────────────────────────────────────────
   return (
     <div className="ut-page">
-      {showLog   && <LogModal   onSave={saveLog}   onClose={() => setShowLog(false)}   limits={limits} />}
-      {showLimit && <LimitModal onSave={saveLimit} onClose={() => setShowLimit(false)} />}
+      {/* Modals */}
+      {showLog        && <LogModal      onSave={saveLog}    onClose={() => setShowLog(false)}        limits={limits} />}
+      {showLimit      && <LimitModal    onSave={saveLimit}  onClose={() => setShowLimit(false)} />}
+      {showAddBlocker && <AddBlockerModal onSave={saveBlocker} onClose={() => setShowAddBlocker(false)} />}
+
+      {/* Shame screen overlay */}
+      {shameSession && (
+        <ShameScreen
+          session={shameSession}
+          tasks={shameTasks}
+          routines={shameRoutines}
+          shameHistory={shameHistory}
+          onDismiss={() => setShameSession(null)}
+          onGoToTasks={() => { setShameSession(null); navigate('/tasks') }}
+        />
+      )}
 
       {/* Header */}
       <div className="ut-header">
         <div>
           <div className="page-tagline">Productivity Tracker</div>
-          <h1 className="page-title">Screen time</h1>
+          <h1 className="page-title">Screen Time</h1>
         </div>
         <div className="ut-header-actions">
-          <button className="btn-ghost btn-sm" onClick={() => setShowLimit(true)}>⏱ Set limit</button>
-          <button className="btn-primary btn-sm" onClick={() => setShowLog(true)}>+ Log usage</button>
+          <button className="btn-ghost btn-sm" onClick={() => setShowLimit(true)}>⏱ Limit</button>
+          <button className="btn-primary btn-sm" onClick={() => setShowLog(true)}>+ Log</button>
         </div>
       </div>
 
@@ -374,8 +774,8 @@ export default function UsageTracker({ userId }) {
           <span className="ut-sum-lbl">distractions</span>
         </div>
         <div className="ut-sum-stat">
-          <span className="ut-sum-val">{todayLogs.length}</span>
-          <span className="ut-sum-lbl">logged today</span>
+          <span className="ut-sum-val">{blockers.length}</span>
+          <span className="ut-sum-lbl">blockers</span>
         </div>
         <div className="ut-sum-stat">
           <span className="ut-sum-val">{fmtMins(weekTotal)}</span>
@@ -385,16 +785,107 @@ export default function UsageTracker({ userId }) {
 
       {/* Tabs */}
       <div className="ut-tabs">
-        {[['today','📅 Today'], ['week','📊 Week'], ['limits','⏱ Limits']].map(([k, lbl]) => (
+        {[['blockers','🚨 Blockers'],['today','📅 Today'],['week','📊 Week'],['limits','⏱ Limits']].map(([k, lbl]) => (
           <button key={k} className={`ut-tab${activeTab === k ? ' active' : ''}`}
             onClick={() => setActiveTab(k)}>{lbl}</button>
         ))}
       </div>
 
+      {/* ── BLOCKERS TAB ── */}
+      {activeTab === 'blockers' && (
+        <div className="ut-tab-content">
+
+          {/* Android-only notice on web */}
+          {!Capacitor.isNativePlatform() && (
+            <div className="ut-blocker-webnotice">
+              <span>📱</span>
+              <span>Automatic tracking works in the Android app. On web you can still set up your blockers and goals.</span>
+            </div>
+          )}
+
+          {/* Permission banner */}
+          {Capacitor.isNativePlatform() && !permGranted && (
+            <div className="ut-perm-banner">
+              <div className="ut-perm-text">
+                <strong>Usage Access required</strong>
+                <span>To automatically track distractions, grant Usage Access in Android settings.</span>
+              </div>
+              <button className="btn-primary btn-sm" onClick={enableTracking}>
+                Grant access →
+              </button>
+            </div>
+          )}
+
+          {/* Tracking status */}
+          {Capacitor.isNativePlatform() && permGranted && (
+            <div className={`ut-tracking-status ${isTracking ? 'active' : ''}`}>
+              <div className="ut-tracking-dot" />
+              <span className="ut-tracking-label">{isTracking ? 'Tracking active' : 'Tracking off'}</span>
+              <button
+                className={isTracking ? 'btn-ghost btn-sm' : 'btn-primary btn-sm'}
+                disabled={trackLoading}
+                onClick={isTracking ? disableTracking : enableTracking}>
+                {trackLoading ? '…' : isTracking ? 'Stop' : 'Start tracking'}
+              </button>
+            </div>
+          )}
+
+          {/* Blockers list */}
+          {blockers.length === 0 ? (
+            <div className="ut-empty">
+              <div style={{ fontSize: 40 }}>🚫</div>
+              <p>No distraction apps added yet. Add one and we'll track it — and shame you when you go over your limit.</p>
+              <button className="btn-primary" onClick={() => setShowAddBlocker(true)}>
+                + Add distraction app
+              </button>
+            </div>
+          ) : (
+            <div className="ut-section">
+              <div className="ut-section-title">Distraction apps</div>
+              {blockers.map(b => {
+                const usedMin = nativeUsage[b.package_name] ?? null
+                const overLimit = usedMin !== null && usedMin >= b.daily_limit_minutes
+                return (
+                  <div key={b.id} className={`ut-blocker-row${overLimit ? ' over-limit' : ''}`}>
+                    <span className="ut-blocker-emoji">{b.emoji}</span>
+                    <div className="ut-blocker-info">
+                      <div className="ut-blocker-name">{b.app_name}</div>
+                      <div className="ut-blocker-goal">🎯 {b.major_goal}</div>
+                      <div className="ut-blocker-meta">
+                        Limit: {fmtMins(b.daily_limit_minutes)}
+                        {usedMin !== null && (
+                          <span className={`ut-blocker-usage ${overLimit ? 'over' : ''}`}>
+                            · {fmtMins(usedMin)} used today{overLimit ? ' ⚠️' : ''}
+                          </span>
+                        )}
+                      </div>
+                      {usedMin !== null && (
+                        <div className="ut-bar-track" style={{ marginTop: 4, maxWidth: 200 }}>
+                          <div className="ut-bar-fill" style={{
+                            width: `${Math.min((usedMin / b.daily_limit_minutes) * 100, 100)}%`,
+                            background: overLimit ? '#ef4444' : 'var(--accent)',
+                          }} />
+                        </div>
+                      )}
+                    </div>
+                    <button className="ut-del-btn" style={{ opacity: 1 }}
+                      onClick={() => deleteBlocker(b.id)} title="Remove">✕</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {blockers.length > 0 && (
+            <button className="btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}
+              onClick={() => setShowAddBlocker(true)}>+ Add another app</button>
+          )}
+        </div>
+      )}
+
       {/* ── TODAY TAB ── */}
       {activeTab === 'today' && (
         <div className="ut-tab-content">
-          {/* Date nav */}
           <div className="ut-date-nav">
             <button className="cal-nav-btn" onClick={() => {
               const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d.toISOString().split('T')[0])
@@ -403,12 +894,11 @@ export default function UsageTracker({ userId }) {
               {date === todayStr() ? 'Today' : new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}
             </span>
             <button className="cal-nav-btn" onClick={() => {
-              const d = new Date(date); d.setDate(d.getDate() + 1);
+              const d = new Date(date); d.setDate(d.getDate() + 1)
               const nd = d.toISOString().split('T')[0]
               if (nd <= todayStr()) setDate(nd)
             }} disabled={date >= todayStr()}>›</button>
           </div>
-
           {todayLogs.length === 0 ? (
             <div className="ut-empty">
               <div style={{ fontSize: 36 }}>📱</div>
@@ -417,7 +907,6 @@ export default function UsageTracker({ userId }) {
             </div>
           ) : (
             <>
-              {/* App bars */}
               <div className="ut-section">
                 <div className="ut-section-title">By app</div>
                 {Object.entries(appTotals)
@@ -426,15 +915,11 @@ export default function UsageTracker({ userId }) {
                     const limit = limits.find(l => l.app_name.toLowerCase() === app.toLowerCase())
                     return (
                       <UsageBar key={app} label={app}
-                        emoji={getCatEmoji(category)}
-                        mins={mins}
-                        limitMins={limit?.daily_limit_min}
-                        color={getCatColor(category)} />
+                        emoji={getCatEmoji(category)} mins={mins}
+                        limitMins={limit?.daily_limit_min} color={getCatColor(category)} />
                     )
                   })}
               </div>
-
-              {/* Log entries */}
               <div className="ut-section">
                 <div className="ut-section-title">Log entries</div>
                 {todayLogs.map(l => (
@@ -480,7 +965,6 @@ export default function UsageTracker({ userId }) {
               })}
             </div>
           </div>
-
           <div className="ut-two-col">
             <div className="ut-section">
               <div className="ut-section-title">By category</div>
@@ -489,10 +973,7 @@ export default function UsageTracker({ userId }) {
                 .map(([cat, mins]) => (
                   <UsageBar key={cat}
                     label={CATEGORIES.find(c => c.key === cat)?.label || cat}
-                    emoji={getCatEmoji(cat)}
-                    mins={mins}
-                    limitMins={null}
-                    color={getCatColor(cat)} />
+                    emoji={getCatEmoji(cat)} mins={mins} limitMins={null} color={getCatColor(cat)} />
                 ))}
             </div>
             <div className="ut-section">
@@ -528,7 +1009,7 @@ export default function UsageTracker({ userId }) {
           {limits.length === 0 ? (
             <div className="ut-empty">
               <div style={{ fontSize: 36 }}>⏱</div>
-              <p>No limits set yet. Set daily limits to stay aware of your usage.</p>
+              <p>No limits set yet.</p>
               <button className="btn-primary" onClick={() => setShowLimit(true)}>Set first limit</button>
             </div>
           ) : (
@@ -548,9 +1029,7 @@ export default function UsageTracker({ userId }) {
                         }} />
                       </div>
                     </div>
-                    <span className="ut-entry-dur">
-                      {fmtMins(todayUsed)} / {fmtMins(l.daily_limit_min)}
-                    </span>
+                    <span className="ut-entry-dur">{fmtMins(todayUsed)} / {fmtMins(l.daily_limit_min)}</span>
                     <button className="ut-del-btn" onClick={() => deleteLimit(l.id)} title="Remove limit">✕</button>
                   </div>
                 )

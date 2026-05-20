@@ -657,3 +657,379 @@
 
   .ut-ws-val { font-size: 16px; }
 }
+
+/* ── Blocker tab ──────────────────────────────────────────── */
+
+.ut-blocker-webnotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+.ut-perm-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f59e0b15;
+  border: 1px solid #f59e0b50;
+  border-radius: 12px;
+}
+
+.ut-perm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ut-perm-text strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ut-perm-text span {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.4;
+}
+
+.ut-tracking-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+}
+
+.ut-tracking-status.active {
+  background: #10b98110;
+  border-color: #10b98140;
+}
+
+.ut-tracking-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+  flex-shrink: 0;
+}
+
+.ut-tracking-status.active .ut-tracking-dot {
+  background: #10b981;
+  box-shadow: 0 0 0 3px #10b98130;
+  animation: pulse-dot 1.8s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 3px #10b98130; }
+  50%       { box-shadow: 0 0 0 6px #10b98110; }
+}
+
+.ut-tracking-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Blocker row */
+.ut-blocker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  transition: border-color 0.15s;
+}
+
+.ut-blocker-row.over-limit {
+  background: #ef444408;
+  border-color: #ef444430;
+}
+
+.ut-blocker-emoji {
+  font-size: 26px;
+  flex-shrink: 0;
+  width: 34px;
+  text-align: center;
+  margin-top: 2px;
+}
+
+.ut-blocker-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ut-blocker-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ut-blocker-goal {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.4;
+}
+
+.ut-blocker-meta {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+.ut-blocker-usage {
+  color: var(--text2);
+}
+
+.ut-blocker-usage.over {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+/* Goal input in modal */
+.ut-goal-input {
+  font-size: 15px !important;
+  padding: 12px !important;
+}
+
+.ut-field-hint {
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.4;
+}
+
+/* ── Shame screen ─────────────────────────────────────────── */
+
+.shame-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0a0f;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: env(safe-area-inset-top, 20px) 0 env(safe-area-inset-bottom, 20px);
+  animation: shame-in 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes shame-in {
+  from { opacity: 0; transform: scale(1.03); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.shame-content {
+  width: 100%;
+  max-width: 480px;
+  padding: 32px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Hero */
+.shame-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.shame-emoji {
+  font-size: 56px;
+  line-height: 1;
+  filter: grayscale(0.3);
+  animation: shake 0.5s ease 0.3s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: rotate(0deg); }
+  20%       { transform: rotate(-8deg); }
+  40%       { transform: rotate(8deg); }
+  60%       { transform: rotate(-5deg); }
+  80%       { transform: rotate(5deg); }
+}
+
+.shame-headline {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.shame-time-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 20px;
+  background: #ef444420;
+  border: 1px solid #ef444440;
+  border-radius: 14px;
+  margin-top: 4px;
+}
+
+.shame-time-val {
+  font-size: 28px;
+  font-weight: 900;
+  color: #ef4444;
+  line-height: 1;
+}
+
+.shame-time-sub {
+  font-size: 12px;
+  color: #ef444499;
+  margin-top: 2px;
+}
+
+/* Goal block */
+.shame-goal-block {
+  padding: 16px 18px;
+  background: #ffffff08;
+  border: 1px solid #ffffff15;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shame-goal-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff55;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.shame-goal-text {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.3;
+}
+
+/* Sections */
+.shame-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shame-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff40;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.shame-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shame-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: #ffffffcc;
+  line-height: 1.4;
+}
+
+.shame-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.shame-dot-routine {
+  background: #f59e0b;
+}
+
+.shame-list-more {
+  font-size: 12px;
+  color: #ffffff40;
+  padding-left: 16px;
+}
+
+/* Streak */
+.shame-streak {
+  font-size: 13px;
+  color: #ffffff60;
+  text-align: center;
+  padding: 8px;
+}
+
+.shame-streak strong {
+  color: #ef4444;
+}
+
+/* Actions */
+.shame-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.shame-btn-back {
+  width: 100%;
+  padding: 16px;
+  background: #ffffff12;
+  border: 1px solid #ffffff20;
+  border-radius: 14px;
+  color: #ffffffcc;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-height: 52px;
+}
+
+.shame-btn-back:hover {
+  background: #ffffff1e;
+}
+
+.shame-btn-tasks {
+  width: 100%;
+  padding: 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  min-height: 52px;
+}
+
+.shame-btn-tasks:hover {
+  opacity: 0.88;
+}
