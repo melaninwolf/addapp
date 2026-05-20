@@ -488,3 +488,123 @@ public class UsageTrackerService extends Service {
         }
     }
 }
+            LinearLayout.LayoutParams bp =
+                new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            bp.setMargins(0, 0, 0, dp(10));
+            root.addView(goBackBtn, bp);
+            goBackBtn.setOnClickListener(v -> {
+                removeOverlay();
+                Intent launch = new Intent(UsageTrackerService.this, MainActivity.class);
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(launch);
+            });
+
+            // Snooze button
+            Button snoozeBtn = new Button(this);
+            snoozeBtn.setText("Continue (back in 10 min)");
+            snoozeBtn.setTextColor(Color.argb(180, 255, 255, 255));
+            snoozeBtn.setBackgroundColor(Color.argb(70, 255, 255, 255));
+            root.addView(snoozeBtn, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+            snoozeBtn.setOnClickListener(v -> {
+                removeOverlay();
+                lastOverlayTime.put(pkg, System.currentTimeMillis());
+            });
+
+            WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+            params.gravity = Gravity.TOP | Gravity.START;
+
+            try {
+                windowManager.addView(root, params);
+                overlayView = root;
+                overlayPkg  = pkg;
+            } catch (Exception ignored) {}
+        });
+    }
+
+    private void removeOverlay() {
+        if (overlayView != null) {
+            try { windowManager.removeView(overlayView); } catch (Exception ignored) {}
+            overlayView = null;
+            overlayPkg  = null;
+        }
+    }
+
+    private int dp(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    private void addShameSession(SharedPreferences prefs, String appId,
+            String appName, long minutes, int limit, String goal, String emoji) {
+        try {
+            JSONArray arr = new JSONArray(prefs.getString(UsageTrackerPlugin.KEY_PENDING_SHAME, "[]"));
+            JSONObject obj = new JSONObject();
+            obj.put("appId", appId); obj.put("appName", appName);
+            obj.put("minutesUsed", minutes); obj.put("limitMinutes", limit);
+            obj.put("majorGoal", goal); obj.put("emoji", emoji);
+            obj.put("shamedAt", System.currentTimeMillis());
+            arr.put(obj);
+            prefs.edit().putString(UsageTrackerPlugin.KEY_PENDING_SHAME, arr.toString()).apply();
+        } catch (Exception ignored) {}
+    }
+
+    private void sendShameNotification(String appName, long minutes,
+            int limit, String goal, String emoji) {
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        Intent tapIntent = new Intent(this, MainActivity.class);
+        tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pi = PendingIntent.getActivity(this, 0, tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        long over = minutes - limit;
+        String body = "You've spent " + minutes + " min on " + appName +
+            " (" + over + " min over your " + limit + " min limit)." +
+            (goal.isEmpty() ? "" : "\nGoal waiting: " + goal) +
+            "\n\nAn overlay will appear every 10 minutes while you're in the app.";
+        Notification notif = new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(emoji + " Time's up on " + appName)
+            .setContentText(minutes + "min · " + over + "min over your " + limit + "min limit")
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pi).setAutoCancel(true).build();
+        nm.notify((int)(NOTIF_FG_ID + appName.hashCode()), notif);
+    }
+
+    private Notification buildForegroundNotification() {
+        Intent tapIntent = new Intent(this, MainActivity.class);
+        PendingIntent pi = PendingIntent.getActivity(this, 0, tapIntent, PendingIntent.FLAG_IMMUTABLE);
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            .setContentTitle("Screen Timer active")
+            .setContentText("Watching for distraction apps")
+            .setContentIntent(pi).setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN).build();
+    }
+
+    private void createNotificationChannel() {
+        NotificationChannel ch = new NotificationChannel(
+            CHANNEL_ID, "Screen Timer", NotificationManager.IMPORTANCE_HIGH);
+        ch.setDescription("Distraction app alerts");
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm != null) nm.createNotificationChannel(ch);
+    }
+
+    private void maybeResetNotified(SharedPreferences prefs, Set<String> notifiedSet) {
+        final String KEY = "last_reset_day";
+        int today = Calendar.getInstance().get(Calendar.DAY_OF_YEAR);
+        if (prefs.getInt(KEY, -1) != today) {
+            notifiedSet.clear();
+            lastOverlayTime.clear();
+            prefs.edit().putInt(KEY, today).apply();
+        }
+    }
+}
