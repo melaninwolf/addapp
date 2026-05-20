@@ -10,7 +10,7 @@ function fmtDate(d) {
 }
 
 // ── Milestone item ────────────────────────────────────────────
-function MilestoneItem({ milestone, onMarkDone, onAddMicro, onToggleMicro, onDeleteMilestone }) {
+function MilestoneItem({ milestone, onMarkDone, onAddMicro, onToggleMicro, onDeleteMilestone, onMakeTask }) {
   const [newMicro, setNewMicro] = useState('')
   const [adding,   setAdding]   = useState(false)
 
@@ -299,6 +299,21 @@ export default function ProjectDetail({ userId }) {
     }
   }
 
+  async function makeTaskFromMicro(mm) {
+    if (!userId) return
+    await supabase.from('tasks').insert([{
+      user_id: userId,
+      title: mm.name,
+      status: 'todo',
+      priority: 'medium',
+      project_id: project?.id || null,
+      recurrence: 'none',
+      sort_order: Date.now(),
+    }])
+    // mark the micro-milestone done
+    await toggleMicroMilestone(mm)
+  }
+
   async function toggleMicroMilestone(mm) {
     const newDone = !mm.done
     await supabase.from('micro_milestones').update({ done: newDone }).eq('id', mm.id)
@@ -555,6 +570,7 @@ export default function ProjectDetail({ userId }) {
                 onAddMicro={addMicroMilestone}
                 onToggleMicro={toggleMicroMilestone}
                 onDeleteMilestone={deleteMilestone}
+                onMakeTask={makeTaskFromMicro}
               />
             ))}
           </div>

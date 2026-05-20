@@ -596,3 +596,13 @@
   transition: all 0.12s;
 }
 .dl-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Recurring task chip ── */
+.tc-recur {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent)18;
+  color: var(--accent);
+  font-weight: 600;
+}

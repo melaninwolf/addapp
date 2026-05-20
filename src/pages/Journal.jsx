@@ -350,6 +350,8 @@ function MonthCalendar({ selectedDate, onSelectDate, loggedDates }) {
 function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
   const [entry,      setEntry]      = useState(null)
   const [tasks,      setTasks]      = useState([])
+  const [addingTask,  setAddingTask]  = useState(false)
+  const [newTaskTitle,setNewTaskTitle]= useState('')
   const [weather,    setWeather]    = useState(null)
   const [saving,     setSaving]     = useState(false)
   const [activeTab,  setActiveTab]  = useState('priorities')
@@ -411,15 +413,28 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
       const s = JSON.parse(localStorage.getItem('addapp-settings') || '{}')
       let lat = s.weatherLat, lon = s.weatherLon
       if (!lat || !lon) {
+        // On Android the WebView will show the OS location permission dialog
         const pos = await new Promise((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000 }))
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000, enableHighAccuracy: false }))
         lat = pos.coords.latitude; lon = pos.coords.longitude
         localStorage.setItem('addapp-settings', JSON.stringify({ ...s, weatherLat: lat, weatherLon: lon }))
       }
       const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&temperature_unit=celsius`)
+      if (!r.ok) return
       const d = await r.json()
-      setWeather({ temp: Math.round(d.current.temperature_2m), condition: WMO[d.current.weathercode] || '🌡️' })
-    } catch { /* denied or offline */ }
+      if (d.current?.temperature_2m != null) {
+        setWeather({ temp: Math.round(d.current.temperature_2m), condition: WMO[d.current.weathercode] || '🌡️' })
+      }
+    } catch (e) {
+      // Geolocation denied or offline — clear cached coords so next open retries
+      try {
+        const s = JSON.parse(localStorage.getItem('addapp-settings') || '{}')
+        if (e?.code === 1) { // PERMISSION_DENIED
+          const { weatherLat, weatherLon, ...rest } = s
+          localStorage.setItem('addapp-settings', JSON.stringify(rest))
+        }
+      } catch {}
+    }
   }
 
   async function save() {
@@ -449,6 +464,22 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
     const ns = task.status === 'done' ? 'todo' : 'done'
     await supabase.from('tasks').update({ status: ns, updated_at: new Date().toISOString() }).eq('id', task.id)
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: ns } : t))
+  }
+
+  async function addTaskFromJournal(title) {
+    if (!title.trim() || !userId) return
+    const { data } = await supabase.from('tasks').insert([{
+      user_id: userId,
+      title: title.trim(),
+      status: 'todo',
+      priority: 'medium',
+      due_date: date,
+      recurrence: 'none',
+      sort_order: tasks.length * 1000,
+    }]).select()
+    if (data) setTasks(prev => [...prev, ...data])
+    setNewTaskTitle('')
+    setAddingTask(false)
   }
 
   return (
@@ -576,8 +607,28 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
 
           {activeTab === 'tasks' && (
             <div className="journal-panel">
-              <div className="journal-col-title">Tasks due today</div>
-              {tasks.length === 0
+              <div className="journal-col-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                Tasks due today
+                <button className="jtask-add-btn" onClick={() => setAddingTask(a => !a)}>+ Add</button>
+              </div>
+              {addingTask && (
+                <div className="jtask-add-row">
+                  <input
+                    className="jtask-add-input"
+                    placeholder="Task title…"
+                    autoFocus
+                    value={newTaskTitle}
+                    onChange={e => setNewTaskTitle(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter')  addTaskFromJournal(newTaskTitle)
+                      if (e.key === 'Escape') { setAddingTask(false); setNewTaskTitle('') }
+                    }}
+                  />
+                  <button className="jtask-add-confirm" onClick={() => addTaskFromJournal(newTaskTitle)}>✓</button>
+                  <button className="jtask-add-cancel" onClick={() => { setAddingTask(false); setNewTaskTitle('') }}>✕</button>
+                </div>
+              )}
+              {tasks.length === 0 && !addingTask
                 ? <p className="journal-empty">No tasks due today.</p>
                 : tasks.map(task => (
                     <div key={task.id} className="jtask-row" onClick={() => toggleTask(task)}>
@@ -1505,6 +1556,51 @@ function MonthlyPage({ month, onMonthChange, subView, onSubViewChange, userId })
 }
 
 // ── Main Journal ──────────────────────────────────────────────
+
+// ── Pinch-to-zoom hook (mobile) ──────────────────────────────
+function usePinchZoom(ref) {
+  const lastDist = useRef(null)
+  const scale    = useRef(1)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    function dist(t) {
+      const dx = t[0].clientX - t[1].clientX
+      const dy = t[0].clientY - t[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    function onTouchStart(e) {
+      if (e.touches.length === 2) lastDist.current = dist(e.touches)
+    }
+
+    function onTouchMove(e) {
+      if (e.touches.length !== 2 || lastDist.current === null) return
+      e.preventDefault()
+      const d = dist(e.touches)
+      const delta = d / lastDist.current
+      scale.current = Math.min(Math.max(scale.current * delta, 0.7), 2.5)
+      el.style.fontSize = scale.current + 'rem'
+      lastDist.current = d
+    }
+
+    function onTouchEnd(e) {
+      if (e.touches.length < 2) lastDist.current = null
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    el.addEventListener('touchend',   onTouchEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
+      el.removeEventListener('touchend',   onTouchEnd)
+    }
+  }, [ref])
+}
+
 export default function Journal({ userId }) {
   const [view,           setView]           = useState('daily')
   const [selectedDate,   setSelectedDate]   = useState(todayStr())
@@ -1514,6 +1610,9 @@ export default function Journal({ userId }) {
   const [monthlySubView, setMonthlySubView] = useState('review')
   const [monthlyMonth,   setMonthlyMonth]   = useState(() => todayStr().slice(0, 7))
   const [yearlyYear,     setYearlyYear]     = useState(() => new Date().getFullYear())
+
+  const journalBodyRef = useRef(null)
+  usePinchZoom(journalBodyRef)
 
   function openMonthly(month, subView) {
     setMonthlyMonth(month)
@@ -1562,7 +1661,7 @@ export default function Journal({ userId }) {
         ))}
       </div>
 
-      <div className="journal-body">
+      <div className="journal-body" ref={journalBodyRef}>
         {/* Left: calendar (shown on daily + weekly view) */}
         {(view === 'daily' || view === 'weekly') && (
           <MonthCalendar
@@ -1574,6 +1673,7 @@ export default function Journal({ userId }) {
 
         {/* Right: content */}
         <div className="journal-main">
+          {view === 'daily'     && <DailyEntry key={selectedDate} date={selectedDate} userId={userId} healthLog={healthLog} onLogged={markLogged} onOpenMonthly={openMonthly} />}
           {view === 'daily'     && <DailyEntry key={selectedDate} date={selectedDate} userId={userId} healthLog={healthLog} onLogged={markLogged} onOpenMonthly={openMonthly} />}
           {view === 'weekly'    && <WeeklyView weekStart={weekStart} userId={userId} />}
           {view === 'monthly'   && <MonthlyPage month={monthlyMonth} onMonthChange={setMonthlyMonth} subView={monthlySubView} onSubViewChange={setMonthlySubView} userId={userId} />}

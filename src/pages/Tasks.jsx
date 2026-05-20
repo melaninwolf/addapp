@@ -24,6 +24,22 @@ const PRIORITIES = [
   { key: 'low',    label: 'Low',    color: '#4ade80' },
 ]
 
+const RECURRENCES = [
+  { key: 'none',    label: 'None' },
+  { key: 'daily',   label: 'Daily' },
+  { key: 'weekly',  label: 'Weekly' },
+  { key: 'monthly', label: 'Monthly' },
+]
+
+function nextDueDate(current, recurrence) {
+  if (!current || recurrence === 'none') return null
+  const d = new Date(current + 'T00:00:00')
+  if (recurrence === 'daily')   d.setDate(d.getDate() + 1)
+  if (recurrence === 'weekly')  d.setDate(d.getDate() + 7)
+  if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1)
+  return d.toISOString().split('T')[0]
+}
+
 function priColor(p) {
   return PRIORITIES.find(x => x.key === p)?.color || '#94a3b8'
 }
@@ -58,6 +74,7 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
   const [dueDate,    setDueDate]    = useState('')
   const [dueTime,    setDueTime]    = useState('')
   const [notes,      setNotes]      = useState('')
+  const [recurrence, setRecurrence] = useState('none')
   const [saving,     setSaving]     = useState(false)
 
   useEffect(() => {
@@ -71,9 +88,10 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
       setDueDate(task.due_date || '')
       setDueTime(task.due_time || '')
       setNotes(task.notes || '')
+      setRecurrence(task.recurrence || 'none')
     } else {
       setTitle(''); setStatus(defaultStatus || 'todo'); setPriority('medium')
-      setCategoryId(categories[0]?.id || ''); setProjectId(''); setDueDate(''); setDueTime(''); setNotes('')
+      setCategoryId(categories[0]?.id || ''); setProjectId(''); setDueDate(''); setDueTime(''); setNotes(''); setRecurrence('none')
     }
   }, [open, task]) // eslint-disable-line
 
@@ -83,7 +101,7 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
     if (!title.trim() || saving) return
     setSaving(true)
     try {
-      await onSave({ title: title.trim(), status, priority, category_id: categoryId || null, project_id: projectId || null, due_date: dueDate || null, due_time: dueTime || null, notes: notes.trim() || null })
+      await onSave({ title: title.trim(), status, priority, category_id: categoryId || null, project_id: projectId || null, due_date: dueDate || null, due_time: dueTime || null, notes: notes.trim() || null, recurrence })
       onClose()
     } finally { setSaving(false) }
   }
@@ -160,6 +178,21 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
             </div>
           </div>
 
+          <div className="modal-field">
+            <label className="modal-label">Repeat</label>
+            <div className="pri-picker">
+              {RECURRENCES.map(r => (
+                <button key={r.key}
+                  className={`pri-btn${recurrence === r.key ? ' active' : ''}`}
+                  type="button"
+                  onClick={() => setRecurrence(r.key)}>
+                  {r.key !== 'none' && <span style={{ marginRight: 4 }}>🔄</span>}
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <textarea className="modal-input modal-textarea"
             placeholder="Notes (optional)" rows={3}
             value={notes} onChange={e => setNotes(e.target.value)} />
@@ -206,6 +239,9 @@ function TaskCard({ task, categories, onEdit, onToggleDone, onDragStart, onDragE
         </button>
         <div className="tc-title">{task.title}</div>
       </div>
+      {task.recurrence && task.recurrence !== 'none' && (
+        <span className="tc-chip tc-recur" title={task.recurrence}>🔄 {task.recurrence}</span>
+      )}
       {(task.due_date || cat) && (
         <div className="tc-meta">
           {task.due_date && (
@@ -418,9 +454,31 @@ export default function Tasks({ userId }) {
       .eq('id', id).eq('user_id', userId)
   }
 
-  function handleToggleDone(task) {
+  async function handleToggleDone(task) {
     const newStatus = task.status === 'done' ? 'todo' : 'done'
-    if (newStatus === 'done') addMAM(MAM_TASK)
+    if (newStatus === 'done') {
+      addMAM(MAM_TASK)
+      // Spawn next occurrence for recurring tasks
+      if (task.recurrence && task.recurrence !== 'none' && task.due_date) {
+        const nextDate = nextDueDate(task.due_date, task.recurrence)
+        if (nextDate) {
+          const { data } = await supabase.from('tasks').insert([{
+            user_id: userId,
+            title: task.title,
+            status: 'todo',
+            priority: task.priority,
+            category_id: task.category_id,
+            project_id: task.project_id,
+            due_date: nextDate,
+            due_time: task.due_time,
+            notes: task.notes,
+            recurrence: task.recurrence,
+            sort_order: (task.sort_order || 0) + 1,
+          }]).select()
+          if (data) setTasks(prev => [...prev, ...data])
+        }
+      }
+    }
     updateTaskField(task.id, { status: newStatus })
   }
 

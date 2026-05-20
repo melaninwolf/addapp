@@ -1292,3 +1292,48 @@
   background: var(--bg2);
   color: var(--text);
 }
+
+/* ── Add task from journal ── */
+.jtask-add-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+.jtask-add-btn:hover { background: var(--accent)18; }
+
+.jtask-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.jtask-add-input {
+  flex: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+}
+.jtask-add-input:focus { border-color: var(--accent); }
+.jtask-add-confirm, .jtask-add-cancel {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.jtask-add-confirm { background: var(--accent); color: #fff; }
+.jtask-add-cancel  { background: var(--bg3); color: var(--text3); }

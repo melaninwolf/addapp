@@ -38,7 +38,7 @@ export async function checkHealthConnectAvailability() {
 export async function requestHealthPermissions() {
   if (!isHealthConnectSupported()) return { granted: false }
   try {
-    return await getPlugin().requestPermissions()
+    return await getPlugin().requestHealthPermissions()
   } catch (e) {
     return { granted: false, error: e?.message }
   }

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.result.ActivityResult
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -53,7 +54,7 @@ class HealthConnectPlugin : Plugin() {
     // ── requestPermissions ───────────────────────────────────────────────────
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    fun requestHealthPermissions(call: PluginCall) {
         val client = getClient() ?: run {
             call.resolve(JSObject().put("granted", false).put("notInstalled", true))
             return
@@ -66,7 +67,7 @@ class HealthConnectPlugin : Plugin() {
                     return@launch
                 }
                 // Launch the Health Connect permission dialog
-                val intent = client.permissionController
+                val intent = PermissionController
                     .createRequestPermissionResultContract()
                     .createIntent(context, REQUIRED_PERMISSIONS)
                 startActivityForResult(call, intent, "onPermissionResult")

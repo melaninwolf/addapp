@@ -1101,3 +1101,33 @@
   .pd-header { flex-direction: column; }
   .pd-header-right { align-items: flex-start; }
 }
+
+/* ── Micro-milestone → Task button ── */
+.mm-dot-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  cursor: pointer;
+}
+.mm-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mm-to-task-btn {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border2);
+  background: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+}
+.mm-item:hover .mm-to-task-btn { opacity: 1; }
+.mm-to-task-btn:hover { color: var(--accent); border-color: var(--accent); }
