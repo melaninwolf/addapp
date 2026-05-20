@@ -479,6 +479,7 @@ export default function UsageTracker({ userId }) {
   const [blockers,      setBlockers]      = useState([])
   const [nativeUsage,   setNativeUsage]   = useState({})     // pkg → minutes
   const [permGranted,   setPermGranted]   = useState(false)
+  const [overlayGranted, setOverlayGranted] = useState(false)
   const [isTracking,    setIsTracking]    = useState(false)
   const [showAddBlocker,setShowAddBlocker]= useState(false)
   const [trackLoading,  setTrackLoading]  = useState(false)
@@ -495,6 +496,7 @@ export default function UsageTracker({ userId }) {
     loadAll()
     if (Capacitor.isNativePlatform()) {
       checkNativePermission()
+      checkOverlayPermission()
       checkTrackingStatus()
     }
   }, [userId])
@@ -535,6 +537,13 @@ export default function UsageTracker({ userId }) {
     try {
       const res = await NativeUT?.checkUsagePermission()
       setPermGranted(res?.granted === true)
+    } catch {}
+  }
+
+  async function checkOverlayPermission() {
+    try {
+      const res = await NativeUT?.hasOverlayPermission()
+      setOverlayGranted(res?.granted === true)
     } catch {}
   }
 
@@ -623,6 +632,12 @@ export default function UsageTracker({ userId }) {
       setTimeout(() => checkNativePermission(), 2000)
       return
     }
+    // Also request overlay permission if not yet granted
+    if (!overlayGranted) {
+      await NativeUT?.requestOverlayPermission()
+      setTimeout(() => checkOverlayPermission(), 3000)
+      // Don't return — tracking still works, overlay just won't show until granted
+    }
     if (!blockers.length) { setShowAddBlocker(true); return }
 
     setTrackLoading(true)
@@ -635,7 +650,12 @@ export default function UsageTracker({ userId }) {
         majorGoal:    b.major_goal || '',
         emoji:        b.emoji || '📱',
       }))
-      await NativeUT?.startTracking({ apps })
+      await NativeUT?.startTracking({
+        apps,
+        userId,
+        supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+        supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      })
       setIsTracking(true)
     } catch (err) {
       console.error(err)
@@ -668,7 +688,12 @@ export default function UsageTracker({ userId }) {
           id: b.id, packageName: b.package_name, appName: b.app_name,
           limitMinutes: b.daily_limit_minutes, majorGoal: b.major_goal || '', emoji: b.emoji || '📱',
         }))
-        await NativeUT?.startTracking({ apps })
+        await NativeUT?.startTracking({
+          apps,
+          userId,
+          supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+          supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        })
       }
     }
     setShowAddBlocker(false)
@@ -812,6 +837,22 @@ export default function UsageTracker({ userId }) {
               </div>
               <button className="btn-primary btn-sm" onClick={enableTracking}>
                 Grant access →
+              </button>
+            </div>
+          )}
+
+          {/* Overlay permission banner — shown only when usage perm is granted but overlay isn't */}
+          {Capacitor.isNativePlatform() && permGranted && !overlayGranted && (
+            <div className="ut-perm-banner ut-perm-banner-overlay">
+              <div className="ut-perm-text">
+                <strong>⚡ Enable overlay blocking</strong>
+                <span>Allow AddApp to appear on top of TikTok and stop you in the moment. Tap to grant "Display over other apps".</span>
+              </div>
+              <button className="btn-primary btn-sm" onClick={async () => {
+                await NativeUT?.requestOverlayPermission()
+                setTimeout(() => checkOverlayPermission(), 3000)
+              }}>
+                Grant →
               </button>
             </div>
           )}

@@ -1033,3 +1033,10 @@
 .shame-btn-tasks:hover {
   opacity: 0.88;
 }
+
+/* ── Overlay permission banner ── */
+.ut-perm-banner-overlay {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 10%, var(--bg2));
+}
+.ut-perm-banner-overlay strong { color: var(--amber); }

@@ -23,6 +23,10 @@ public class UsageTrackerPlugin extends Plugin {
     public static final String KEY_TRACKED_APPS  = "tracked_apps";
     public static final String KEY_PENDING_SHAME = "pending_shame";
     public static final String KEY_NOTIFIED_TODAY = "notified_today";
+    public static final String KEY_USER_ID        = "user_id";
+    public static final String KEY_SUPABASE_URL   = "supabase_url";
+    public static final String KEY_SUPABASE_KEY   = "supabase_key";
+    public static final String KEY_DEVICE_ID      = "device_id";
 
     private SharedPreferences prefs() {
         return getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -50,9 +54,20 @@ public class UsageTrackerPlugin extends Plugin {
             call.reject("apps parameter required");
             return;
         }
+        String userId       = call.getString("userId", "");
+        String supabaseUrl  = call.getString("supabaseUrl", "");
+        String supabaseKey  = call.getString("supabaseKey", "");
+        String deviceId     = android.provider.Settings.Secure.getString(
+            getContext().getContentResolver(),
+            android.provider.Settings.Secure.ANDROID_ID);
+
         prefs().edit()
-            .putString(KEY_TRACKED_APPS, appsArray.toString())
+            .putString(KEY_TRACKED_APPS,   appsArray.toString())
             .putString(KEY_NOTIFIED_TODAY, "[]")
+            .putString(KEY_USER_ID,        userId)
+            .putString(KEY_SUPABASE_URL,   supabaseUrl)
+            .putString(KEY_SUPABASE_KEY,   supabaseKey)
+            .putString(KEY_DEVICE_ID,      deviceId != null ? deviceId : "unknown")
             .apply();
 
         Intent intent = new Intent(getContext(), UsageTrackerService.class);
@@ -116,6 +131,23 @@ public class UsageTrackerPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("active", UsageTrackerService.isRunning);
         call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void hasOverlayPermission(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("granted", Settings.canDrawOverlays(getContext()));
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestOverlayPermission(PluginCall call) {
+        Intent intent = new Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:" + getContext().getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
     }
 
     private boolean hasUsagePermission() {
