@@ -464,8 +464,7 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
 
       if (Math.abs(clampMin - d.originalStartMin) > 5 || t.colIdx !== d.originalColIdx) d.moved = true
       d.currentStartMin = clampMin
-      // Routines stay in original column (changing day would alter the weekly recurrence)
-      d.currentColIdx = d.blockType === 'routine' ? d.originalColIdx : t.colIdx
+      d.currentColIdx = t.colIdx
       setWvDragVis(v => v ? { ...v, startMin: clampMin, colIdx: d.currentColIdx } : null)
     }
 
@@ -474,10 +473,13 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
       if (d?.moved) {
         const newTime   = minsToTime(d.currentStartMin)
         const targetDay = weekDays[d.currentColIdx]
+        const fromDow = DOW_KEYS[weekDays[d.originalColIdx].getDay()]
+        const toDow   = DOW_KEYS[targetDay.getDay()]
         const payload   = {
           start_time: newTime,
           end_time:   minsToTime(d.currentStartMin + d.durMin),
           ...(d.blockType !== 'routine' && { new_date: formatDateForInput(targetDay) }),
+          ...(d.blockType === 'routine' && d.currentColIdx !== d.originalColIdx && { from_weekday: fromDow, to_weekday: toDow }),
         }
         onUpdateBlock && onUpdateBlock(d.blockType, d.eventId, payload)
       }
@@ -1283,6 +1285,8 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
           onViewEvent && onViewEvent(d.data)
         } else if (!d.moved && d.blockType === 'task') {
           onViewTask && onViewTask(d.data)
+        } else if (!d.moved && d.blockType === 'routine') {
+          onEditLog && onEditLog(d.data)
         } else if (d.moved && d.currentStartMin !== d.originalStartMin) {
           onUpdateBlock && onUpdateBlock(d.blockType, d.eventId, {
             start_time: minsToTime(d.currentStartMin),
@@ -1915,10 +1919,18 @@ export default function Calendar({ userId }) {
       return updateCalendarEvent(id, update)
     }
     if (type === 'routine') {
+      const updates = { time: payload.start_time }
+      if (payload.from_weekday && payload.to_weekday) {
+        const routine = routines.find(r => r.id === id)
+        if (routine) {
+          updates.days = [...(routine.days || []).filter(d => d !== payload.from_weekday), payload.to_weekday]
+            .filter((d, i, a) => a.indexOf(d) === i) // dedupe
+        }
+      }
       const { error } = await supabase.from('routines')
-        .update({ time: payload.start_time })
+        .update(updates)
         .eq('id', id).eq('user_id', userId)
-      if (!error) setRoutines(prev => prev.map(r => r.id === id ? { ...r, time: payload.start_time } : r))
+      if (!error) setRoutines(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r))
     }
     if (type === 'task') {
       const update = { due_time: payload.start_time }

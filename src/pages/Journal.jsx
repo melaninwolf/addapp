@@ -179,15 +179,20 @@ function BulletList({ items, onChange, placeholder = 'Add item…', numbered = f
 }
 
 // ── PenField ──────────────────────────────────────────────────
-function PenField({ value, onChange, penData, onPenChange, placeholder, rows = 2, canvasHeight = 80 }) {
-  const [penMode, setPenMode] = useState(false)
+// penMode prop: external control (from global toggle). If undefined, uses internal toggle.
+function PenField({ value, onChange, penData, onPenChange, placeholder, rows = 2, canvasHeight = 80, penMode: externalPen }) {
+  const [localPen, setLocalPen] = useState(false)
+  const isGlobal = externalPen !== undefined
+  const active   = isGlobal ? externalPen : localPen
   return (
     <div className="pen-field">
-      <button className={`pen-toggle-btn${penMode ? ' pen-on' : ''}`}
-        onClick={() => setPenMode(p => !p)} title={penMode ? 'Switch to type' : 'Switch to pen'}>
-        {penMode ? '⌨️' : '✏️'}
-      </button>
-      {penMode
+      {!isGlobal && (
+        <button className={`pen-toggle-btn${active ? ' pen-on' : ''}`}
+          onClick={() => setLocalPen(p => !p)} title={active ? 'Switch to type' : 'Switch to pen'}>
+          {active ? '⌨️' : '✏️'}
+        </button>
+      )}
+      {active
         ? <DrawCanvas data={penData} onChange={onPenChange} height={canvasHeight} />
         : <textarea className="journal-input" rows={rows} placeholder={placeholder}
             value={value || ''} onChange={e => onChange(e.target.value)} />
@@ -197,17 +202,21 @@ function PenField({ value, onChange, penData, onPenChange, placeholder, rows = 2
 }
 
 // ── Schedule slot ─────────────────────────────────────────────
-function ScheduleSlot({ hour, value, penData, onTextChange, onPenChange }) {
-  const [penMode, setPenMode] = useState(false)
+function ScheduleSlot({ hour, value, penData, onTextChange, onPenChange, penMode: externalPen }) {
+  const [localPen, setLocalPen] = useState(false)
+  const isGlobal = externalPen !== undefined
+  const active   = isGlobal ? externalPen : localPen
   return (
     <div className="sched-slot">
       <div className="sched-hour">{hour.label}</div>
       <div className="sched-slot-body">
-        <button className={`pen-toggle-btn sml${penMode ? ' pen-on' : ''}`}
-          onClick={() => setPenMode(p => !p)}>
-          {penMode ? '⌨️' : '✏️'}
-        </button>
-        {penMode
+        {!isGlobal && (
+          <button className={`pen-toggle-btn sml${active ? ' pen-on' : ''}`}
+            onClick={() => setLocalPen(p => !p)}>
+            {active ? '⌨️' : '✏️'}
+          </button>
+        )}
+        {active
           ? <DrawCanvas data={penData} onChange={onPenChange} height={36} />
           : <input className="journal-input sched-input" type="text" placeholder="—"
               value={value || ''} onChange={e => onTextChange(e.target.value)} />
@@ -345,6 +354,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
   const [saving,     setSaving]     = useState(false)
   const [activeTab,  setActiveTab]  = useState('priorities')
 
+  const [globalPen,   setGlobalPen]   = useState(false)
   const [schedule,    setSchedule]    = useState({})
   const [schedulePen, setSchedulePen] = useState({})
   const [priorities,  setPriorities]  = useState(['', '', '', ''])
@@ -466,9 +476,19 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
             )}
           </div>
         </div>
-        <button className="btn-primary entry-save-btn" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : entry ? 'Update' : 'Save entry'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="journal-mode-toggle">
+            <button className={`mode-btn${!globalPen ? ' active' : ''}`} onClick={() => setGlobalPen(false)}>
+              ⌨️ Write
+            </button>
+            <button className={`mode-btn${globalPen ? ' active' : ''}`} onClick={() => setGlobalPen(true)}>
+              ✏️ Pen
+            </button>
+          </div>
+          <button className="btn-primary entry-save-btn" onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : entry ? 'Update' : 'Save entry'}
+          </button>
+        </div>
       </div>
 
       {/* Two-column layout */}
@@ -484,6 +504,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                 penData={schedulePen[hour.key]}
                 onTextChange={v => setSchedule(s => ({ ...s, [hour.key]: v }))}
                 onPenChange={v => setSchedulePen(s => ({ ...s, [hour.key]: v }))}
+                penMode={globalPen}
               />
             ))}
           </div>
@@ -522,7 +543,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                     onChange={v => setPriorities(prev => { const n = [...prev]; n[i] = v; return n })}
                     penData={priPen[i]}
                     onPenChange={v => setPriPen(prev => { const n = [...prev]; n[i] = v; return n })}
-                    placeholder={`Priority ${i + 1}…`} rows={1} canvasHeight={44} />
+                    placeholder={`Priority ${i + 1}…`} rows={1} canvasHeight={44} penMode={globalPen} />
                   {priorities.length > 1 && (
                     <button className="bullet-remove" onClick={() => {
                       setPriorities(prev => prev.filter((_,idx) => idx !== i))
@@ -548,7 +569,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                 <div className="journal-col-title">Notes</div>
                 <PenField value={notes} onChange={setNotes}
                   penData={refPen.notes} onPenChange={v => setRefPen(p => ({ ...p, notes: v }))}
-                  placeholder="Anything on your mind today…" rows={4} canvasHeight={100} />
+                  placeholder="Anything on your mind today…" rows={4} canvasHeight={100} penMode={globalPen} />
               </div>
             </div>
           )}
@@ -583,7 +604,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                   <div className="journal-col-title" style={{ fontSize: 11, marginBottom: 6 }}>{f.label}</div>
                   <PenField value={f.val} onChange={f.set}
                     penData={refPen[f.key]} onPenChange={v => setRefPen(p => ({ ...p, [f.key]: v }))}
-                    placeholder="Write here…" rows={2} canvasHeight={60} />
+                    placeholder="Write here…" rows={2} canvasHeight={60} penMode={globalPen} />
                 </div>
               ))}
             </div>

@@ -150,6 +150,41 @@ function RoutineModal({ routine, onSave, onClose }) {
   const [steps, setSteps] = useState(
     routine?.steps.map(s => ({ ...s })) || [{ id: Date.now(), name: '', dur: 5 }]
   )
+
+  // Keep refs current so unmount auto-save sees latest values
+  const nameRef    = useRef(name)
+  const timeRef    = useRef(time)
+  const emojiRef   = useRef(emoji)
+  const daysRef    = useRef(days)
+  const typeRef    = useRef(type)
+  const hasTimeRef = useRef(hasTime)
+  const hasDaysRef = useRef(hasDays)
+  const stepsRef   = useRef(steps)
+  const savedRef   = useRef(false) // true once explicitly saved
+
+  useEffect(() => { nameRef.current    = name    }, [name])
+  useEffect(() => { timeRef.current    = time    }, [time])
+  useEffect(() => { emojiRef.current   = emoji   }, [emoji])
+  useEffect(() => { daysRef.current    = days    }, [days])
+  useEffect(() => { typeRef.current    = type    }, [type])
+  useEffect(() => { hasTimeRef.current = hasTime }, [hasTime])
+  useEffect(() => { hasDaysRef.current = hasDays }, [hasDays])
+  useEffect(() => { stepsRef.current   = steps   }, [steps])
+
+  // Auto-save on unmount if not already explicitly saved
+  useEffect(() => {
+    return () => {
+      if (savedRef.current) return
+      const n = nameRef.current.trim()
+      const s = stepsRef.current.filter(x => x.name.trim())
+      if (n && s.length > 0) {
+        onSave({ name: n, time: hasTimeRef.current ? timeRef.current : null,
+          days: hasDaysRef.current ? daysRef.current : [], emoji: emojiRef.current,
+          type: typeRef.current, steps: s })
+      }
+    }
+  }, []) // eslint-disable-line
+
   function moveStep(from, to) {
     if (from === to) return
     setSteps(prev => {
@@ -175,6 +210,7 @@ function RoutineModal({ routine, onSave, onClose }) {
 
   function save() {
     if (!name.trim() || steps.filter(s => s.name.trim()).length === 0) return
+    savedRef.current = true
     onSave({ name: name.trim(), time: hasTime ? time : null, days: hasDays ? days : [], emoji, type, steps: steps.filter(s => s.name.trim()) })
   }
 
@@ -1487,3 +1523,52 @@ export default function Routines({ userId }) {
     </div>
   )
 }
+                              </div>
+                              <button className="btn-primary btn-sm" style={{marginBottom:2}} onClick={saveHistoryEdit}>Save</button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {markDoneModal && (
+        <div className="modal-overlay" onClick={() => setMarkDoneModal(null)}>
+          <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Mark as done</h2>
+              <button className="modal-close" onClick={() => setMarkDoneModal(null)}>\xd7</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
+                {markDoneModal.emoji} <strong>{markDoneModal.name}</strong>
+              </p>
+              <div className="field">
+                <label>What time did you finish?</label>
+                <input
+                  type="time"
+                  value={markDoneTime}
+                  onChange={e => setMarkDoneTime(e.target.value)}
+                />
+              </div>
+              <p style={{fontSize:12, color:'var(--text3)', marginTop:'0.75rem'}}>
+                This will log the routine as done and add it to your calendar.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setMarkDoneModal(null)}>Cancel</button>
+              <button className="btn-primary" onClick={submitMarkDone}>Log it</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
