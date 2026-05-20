@@ -450,32 +450,3 @@ export default function App() {
     </BrowserRouter>
   )
 }
-ption } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null)
-      if (event === 'SIGNED_IN') syncXPFromDb()
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  if (authLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', background: 'var(--bg)', color: 'var(--text3)', fontSize: 14
-      }}>
-        Loading...
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <BrowserRouter><Auth /></BrowserRouter>
-  }
-
-  return (
-    <BrowserRouter>
-      <AppShell user={user} />
-    </BrowserRouter>
-  )
-}
