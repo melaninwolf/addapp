@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { getSettings } from '../settings'
-import { addMAM, MAM_WATER } from '../xp'
+import { addMAM, MAM_WATER, MAM_STEPS } from '../xp'
+import { isHealthConnectSupported, checkHealthConnectAvailability, requestHealthPermissions, readAllHealthData } from '../healthConnect'
 import './Health.css'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -578,6 +579,12 @@ function WaterTracker({ userId }) {
   const [goalInput,   setGoalInput]   = useState('8')
   const [saving,      setSaving]      = useState(false)
   const [celebrating, setCelebrating] = useState(false)
+  // Health Connect state (Android only)
+  const [hcAvailable, setHcAvailable]  = useState(false)
+  const [hcData,      setHcData]       = useState(null)
+  const [hcSyncing,   setHcSyncing]    = useState(false)
+  const [hcError,     setHcError]      = useState('')
+
   const today = todayStr()
 
   useEffect(() => { if (userId) loadWater() }, [userId]) // eslint-disable-line
@@ -706,6 +713,12 @@ export default function Health({ userId }) {
   const [showMedForm,  setShowMedForm]  = useState(false)
   const [editingMed,   setEditingMed]   = useState(null) // med object being edited
 
+  // Health Connect state (Android only)
+  const [hcAvailable, setHcAvailable]  = useState(false)
+  const [hcData,      setHcData]       = useState(null)
+  const [hcSyncing,   setHcSyncing]    = useState(false)
+  const [hcError,     setHcError]      = useState('')
+
   const today = todayStr()
 
   const loadMedications = useCallback(async () => {
@@ -738,6 +751,39 @@ export default function Health({ userId }) {
   }
 
   useEffect(() => { loadData() }, [userId]) // eslint-disable-line
+
+  // Check Health Connect availability on Android
+  useEffect(() => {
+    if (!isHealthConnectSupported()) return
+    checkHealthConnectAvailability().then(({ available }) => {
+      setHcAvailable(available)
+      if (available) syncFromHealthConnect(false)
+    })
+  }, []) // eslint-disable-line
+
+  async function syncFromHealthConnect(showErrors = true) {
+    if (!isHealthConnectSupported()) return
+    setHcSyncing(true); setHcError('')
+    try {
+      const { granted } = await requestHealthPermissions()
+      if (!granted) {
+        if (showErrors) setHcError('Health Connect permission not granted.')
+        setHcSyncing(false); return
+      }
+      const data = await readAllHealthData()
+      setHcData(data)
+      const stepGoal = 10000
+      if (data.steps >= stepGoal && userId) {
+        const key = `hc_steps_mam_${today}`
+        if (!localStorage.getItem(key)) {
+          await addMAM(userId, MAM_STEPS)
+          localStorage.setItem(key, '1')
+        }
+      }
+    } catch (e) {
+      if (showErrors) setHcError('Health Connect sync failed.')
+    } finally { setHcSyncing(false) }
+  }
 
   async function saveLog(payload, medLogsToSave) {
     if (!userId) return
@@ -821,6 +867,32 @@ export default function Health({ userId }) {
           </button>
         </div>
       </div>
+
+      {/* Health Connect sync banner (Android only) */}
+      {isHealthConnectSupported() && (
+        <div className="hc-sync-banner">
+          <div className="hc-sync-left">
+            <span className="hc-sync-icon">❤️‍🔥</span>
+            <div>
+              <div className="hc-sync-title">Health Connect</div>
+              {hcData ? (
+                <div className="hc-sync-sub">
+                  {hcData.steps != null && <span>👟 {hcData.steps.toLocaleString()} steps</span>}
+                  {hcData.sleepHours != null && <span>😴 {hcData.sleepHours}h sleep</span>}
+                  {hcData.bpm != null && <span>❤️ {hcData.bpm} bpm</span>}
+                  {hcData.activeCalories != null && <span>🔥 {hcData.activeCalories} kcal</span>}
+                </div>
+              ) : (
+                <div className="hc-sync-sub">{hcAvailable ? "Tap sync to import today's data" : 'Install Health Connect to enable'}</div>
+              )}
+              {hcError && <div className="hc-sync-error">{hcError}</div>}
+            </div>
+          </div>
+          <button className="hc-sync-btn" onClick={() => syncFromHealthConnect(true)} disabled={hcSyncing || !hcAvailable}>
+            {hcSyncing ? '⟳' : '↻ Sync'}
+          </button>
+        </div>
+      )}
 
       {/* Water tracker */}
       <WaterTracker userId={userId} />

@@ -17,13 +17,15 @@ const CLIENT_ID        = import.meta.env.VITE_GOOGLE_CLIENT_ID          // Web a
 const CLIENT_ID_NATIVE = import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE   // Desktop app client (PKCE / Android)
 const REDIRECT_URI = 'com.mar.addapp://oauth2callback'
 const TOKEN_URL    = 'https://oauth2.googleapis.com/token'
+const GCAL_BASE    = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
 
 export function isNativeApp() {
   return Capacitor.isNativePlatform()
 }
 
 // ── Scopes ──────────────────────────────────────────────────────────────────
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
+// calendar.events = read + create/edit/delete events (no calendar management)
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events'
 
 // ── In-memory token cache ────────────────────────────────────────────────────
 let _tokenClient = null
@@ -300,16 +302,93 @@ export async function fetchEvents(token, timeMin, timeMax) {
     maxResults:   '250',
   })
 
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
+  const res = await fetch(`${GCAL_BASE}?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
 
   if (res.status === 401) throw new Error('TOKEN_EXPIRED')
   if (!res.ok)           throw new Error('FETCH_FAILED')
 
   const json = await res.json()
   return json.items || []
+}
+
+
+// ── Write ────────────────────────────────────────────────────────────────────
+
+/**
+ * Convert a local calendar_events row into a Google Calendar event body.
+ */
+export function toGCalBody(ev) {
+  if (ev.all_day) {
+    return {
+      summary:     ev.title,
+      description: ev.notes   || undefined,
+      location:    ev.location || undefined,
+      start: { date: ev.date },
+      end:   { date: ev.end_date || ev.date },
+    }
+  }
+  const tz = ev.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+  return {
+    summary:     ev.title,
+    description: ev.notes    || undefined,
+    location:    ev.location || undefined,
+    start: { dateTime: `${ev.date}T${ev.start_time || '00:00'}:00`, timeZone: tz },
+    end:   { dateTime: `${ev.date}T${ev.end_time   || '01:00'}:00`, timeZone: tz },
+  }
+}
+
+/**
+ * Create an event in the user's primary Google Calendar.
+ * Returns the created GCal event object (including its `id`).
+ */
+export async function createGCalEvent(token, localEvent) {
+  const res = await fetch(GCAL_BASE, {
+    method:  'POST',
+    headers: {
+      Authorization:  `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(toGCalBody(localEvent)),
+  })
+  if (res.status === 401) throw new Error('TOKEN_EXPIRED')
+  if (res.status === 403) throw new Error('PERMISSION_DENIED')
+  if (!res.ok)            throw new Error('CREATE_FAILED')
+  return res.json()
+}
+
+/**
+ * Update an existing GCal event by its GCal event ID.
+ */
+export async function updateGCalEvent(token, gcalEventId, localEvent) {
+  const res = await fetch(`${GCAL_BASE}/${gcalEventId}`, {
+    method:  'PUT',
+    headers: {
+      Authorization:  `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(toGCalBody(localEvent)),
+  })
+  if (res.status === 401) throw new Error('TOKEN_EXPIRED')
+  if (res.status === 403) throw new Error('PERMISSION_DENIED')
+  if (res.status === 404) return null
+  if (!res.ok)            throw new Error('UPDATE_FAILED')
+  return res.json()
+}
+
+/**
+ * Delete a GCal event by its GCal event ID.
+ */
+export async function deleteGCalEvent(token, gcalEventId) {
+  const res = await fetch(`${GCAL_BASE}/${gcalEventId}`, {
+    method:  'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (res.status === 401) throw new Error('TOKEN_EXPIRED')
+  if (res.status === 403) throw new Error('PERMISSION_DENIED')
+  if (res.status === 404) return
+  if (res.status !== 204 && !res.ok) throw new Error('DELETE_FAILED')
 }
 
 /** Extract a JS Date from an event's start (handles dateTime + all-day). */

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { loadGIS, connectGoogle, connectGoogleNative, silentReconnect, disconnectGoogle, fetchEvents, eventStartDate, eventTimeLabel, isConnected, getCachedToken, isNativeApp } from '../googleCalendar'
+import { loadGIS, connectGoogle, connectGoogleNative, silentReconnect, disconnectGoogle, fetchEvents, createGCalEvent, updateGCalEvent, deleteGCalEvent, eventStartDate, eventTimeLabel, isConnected, getCachedToken, isNativeApp } from '../googleCalendar'
 import EmojiPicker from '../components/EmojiPicker'
 import './Calendar.css'
 
@@ -752,7 +752,7 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
 }
 
 // ─── Add / Edit Event Modal ───────────────────────────────────
-function AddEventModal({ open, onClose, onSave, onDelete, defaultDate, initialEvent }) {
+function AddEventModal({ open, onClose, onSave, onDelete, defaultDate, initialEvent, gcalConnected }) {
   const isEdit = !!initialEvent
 
   const [type,          setType]          = useState('appointment')
@@ -770,6 +770,7 @@ function AddEventModal({ open, onClose, onSave, onDelete, defaultDate, initialEv
   const [repeatDays,    setRepeatDays]    = useState([])
   const [repeatEndDate, setRepeatEndDate] = useState('')
   const [saving,        setSaving]        = useState(false)
+  const [syncToGcal,    setSyncToGcal]    = useState(false)
 
   // Initialise / reset when modal opens
   useEffect(() => {
@@ -797,8 +798,9 @@ function AddEventModal({ open, onClose, onSave, onDelete, defaultDate, initialEv
       setLocation(''); setNotes('')
       setRepeatType('none'); setRepeatDays([]); setRepeatEndDate('')
       setEmoji(EVENT_TYPES[0].emoji); setEmojiTouched(false)
+      setSyncToGcal(!!gcalConnected)
     }
-  }, [open, initialEvent, defaultDate])
+  }, [open, initialEvent, defaultDate]) // eslint-disable-line
 
   // Auto-update emoji when type changes (unless user has manually picked one)
   useEffect(() => {
@@ -832,6 +834,7 @@ function AddEventModal({ open, onClose, onSave, onDelete, defaultDate, initialEv
         repeat_days:     repeatDays,
         repeat_end_date: repeatEndDate   || null,
         timezone:        getUserTimezone(),
+        _syncToGcal:     gcalConnected && syncToGcal,
       })
       onClose()
     } finally { setSaving(false) }
@@ -989,6 +992,12 @@ function AddEventModal({ open, onClose, onSave, onDelete, defaultDate, initialEv
             </button>
           )}
           <div style={{ flex: 1 }} />
+          {gcalConnected && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text2)', cursor: 'pointer', marginRight: 4 }}>
+              <input type="checkbox" checked={syncToGcal} onChange={e => setSyncToGcal(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
+              Google Cal
+            </label>
+          )}
           <button className="modal-btn modal-btn-cancel" onClick={onClose}>Cancel</button>
           <button className="modal-btn modal-btn-save"
             onClick={handleSave}
@@ -1890,18 +1899,33 @@ export default function Calendar({ userId }) {
   // ── CRUD ─────────────────────────────────────────────────────
   async function saveCalendarEvent(payload) {
     if (!userId) return
+    const { _syncToGcal, ...rest } = payload
+    let gcalId = null
+    if (_syncToGcal && gcalToken) {
+      try {
+        const gcalEvent = await createGCalEvent(gcalToken, rest)
+        gcalId = gcalEvent?.id || null
+      } catch (err) { console.warn('GCal create failed:', err.message) }
+    }
     const { data, error } = await supabase
       .from('calendar_events')
-      .insert([{ ...payload, user_id: userId }])
+      .insert([{ ...rest, user_id: userId, gcal_event_id: gcalId }])
       .select()
     if (!error && data) setCalEvents(prev => [...prev, ...data])
   }
 
   async function updateCalendarEvent(id, payload) {
     if (!userId) return
+    const { _syncToGcal, ...rest } = payload
+    const existing = calEvents.find(e => e.id === id)
+    if (existing?.gcal_event_id && gcalToken) {
+      try {
+        await updateGCalEvent(gcalToken, existing.gcal_event_id, { ...existing, ...rest })
+      } catch (err) { console.warn('GCal update failed:', err.message) }
+    }
     const { data, error } = await supabase
       .from('calendar_events')
-      .update(payload)
+      .update(rest)
       .eq('id', id)
       .eq('user_id', userId)
       .select()
@@ -1943,6 +1967,12 @@ export default function Calendar({ userId }) {
 
   async function deleteCalendarEvent(id) {
     if (!userId) return
+    const existing = calEvents.find(e => e.id === id)
+    if (existing?.gcal_event_id && gcalToken) {
+      try {
+        await deleteGCalEvent(gcalToken, existing.gcal_event_id)
+      } catch (err) { console.warn('GCal delete failed:', err.message) }
+    }
     const { error } = await supabase
       .from('calendar_events')
       .delete()
@@ -2041,6 +2071,7 @@ export default function Calendar({ userId }) {
         onClose={() => setShowAddModal(false)}
         onSave={saveCalendarEvent}
         defaultDate={selected}
+        gcalConnected={!!gcalToken}
       />
 
       {/* Detail popup */}
@@ -2058,6 +2089,7 @@ export default function Calendar({ userId }) {
         onSave={payload => updateCalendarEvent(editingEvent.id, payload)}
         onDelete={() => deleteCalendarEvent(editingEvent.id)}
         initialEvent={editingEvent}
+        gcalConnected={!!gcalToken}
       />
 
       {/* Task quick-view */}

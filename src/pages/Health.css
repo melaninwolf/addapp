@@ -621,6 +621,51 @@
 /* ── Small button variant ─────────────────────────────────── */
 .btn-sm { padding: 5px 12px !important; font-size: 12px !important; }
 
+/* ── Health Connect Sync Banner ───────────────────────────── */
+.hc-sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.hc-sync-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.hc-sync-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+.hc-sync-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.hc-sync-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.hc-sync-sub span { white-space: nowrap; }
+.hc-sync-error { font-size: 11px; color: #ef4444; margin-top: 4px; }
+.hc-sync-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.hc-sync-btn:disabled { opacity: 0.5; cursor: default; }
+
 /* ── Water Tracker ────────────────────────────────────────── */
 .water-tracker {
   background: var(--bg2);

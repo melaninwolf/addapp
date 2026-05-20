@@ -10,6 +10,7 @@ export const MAM_ROUTINE       = 5    // per routine step (regular)
 export const MAM_TRIGGER       = 3    // per routine step (trigger)
 export const MAM_HOBBY_PER_HR  = 10   // per 60 min of hobby time
 export const MAM_WATER         = 3    // daily water goal met
+export const MAM_STEPS         = 5    // daily step goal reached via Health Connect
 
 export function getXP() {
   return parseInt(localStorage.getItem(XP_KEY) || '0', 10)
