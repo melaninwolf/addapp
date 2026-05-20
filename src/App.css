@@ -188,6 +188,16 @@
   font-size: 10px;
   color: var(--text3);
 }
+.mam-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.mam-gram-row {
+  margin-top: 1px;
+}
 
 /* Destination */
 .mam-destination {

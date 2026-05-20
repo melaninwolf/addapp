@@ -504,6 +504,350 @@ function CaptureModal({ userId, onClose }) {
   )
 }
 
+
+// ── Badge definitions ─────────────────────────────────────────
+const BADGE_DEFS = [
+  { key:'first_task',      emoji:'✅', name:'First Launch',      desc:'Complete your first task' },
+  { key:'tasks_10',        emoji:'🔟', name:'Momentum',          desc:'10 tasks done' },
+  { key:'tasks_50',        emoji:'💯', name:'Executor',          desc:'50 tasks done' },
+  { key:'tasks_100',       emoji:'🏆', name:'Century',           desc:'100 tasks done' },
+  { key:'first_routine',   emoji:'🔁', name:'First Ritual',      desc:'Complete a routine' },
+  { key:'streak_7',        emoji:'🔥', name:'Week Streak',       desc:'7-day routine streak' },
+  { key:'streak_30',       emoji:'🌋', name:'Month Streak',      desc:'30-day routine streak' },
+  { key:'first_focus',     emoji:'🎯', name:'Zone In',           desc:'First focus session' },
+  { key:'focus_10h',       emoji:'⏱',  name:'Deep Worker',       desc:'10 hours of focus' },
+  { key:'first_journal',   emoji:'📓', name:'Inner Voice',       desc:'First journal entry' },
+  { key:'journal_30',      emoji:'📚', name:'Chronicler',        desc:'30 journal entries' },
+  { key:'first_hobby',     emoji:'🌱', name:'New Leaf',          desc:'Log a hobby session' },
+  { key:'hobby_10h',       emoji:'🌳', name:'Dedicated',         desc:'10 hours on a hobby' },
+  { key:'water_7',         emoji:'💧', name:'Hydrated',          desc:'Water goal 7 days running' },
+  { key:'first_project',   emoji:'📁', name:'Builder',           desc:'Create a project' },
+  { key:'project_done',    emoji:'🎖', name:'Shipped',           desc:'Complete a project' },
+  { key:'level_10',        emoji:'🚀', name:'Liftoff',           desc:'Reach level 10' },
+  { key:'level_25',        emoji:'🌕', name:'Moonwalker',        desc:'Reach level 25' },
+  { key:'first_review',    emoji:'🔍', name:'Reflector',         desc:'Complete a review' },
+  { key:'brain_dump_10',   emoji:'🧠', name:'Mind Cleared',      desc:'10 brain dump items' },
+]
+
+// ── Badge checker (pure, no side effects) ─────────────────────
+function checkEarned(key, data) {
+  const { doneTasks, routineLogs, focusSessions, journals, projects, badges, xp, brainItems } = data
+  const streak = computeStreakFromLogs(routineLogs)
+  switch (key) {
+    case 'first_task':    return doneTasks >= 1
+    case 'tasks_10':      return doneTasks >= 10
+    case 'tasks_50':      return doneTasks >= 50
+    case 'tasks_100':     return doneTasks >= 100
+    case 'first_routine': return routineLogs >= 1
+    case 'streak_7':      return streak >= 7
+    case 'streak_30':     return streak >= 30
+    case 'first_focus':   return focusSessions.count >= 1
+    case 'focus_10h':     return focusSessions.totalMins >= 600
+    case 'first_journal': return journals >= 1
+    case 'journal_30':    return journals >= 30
+    case 'first_hobby':   return data.hobbySessions >= 1
+    case 'hobby_10h':     return data.hobbyMins >= 600
+    case 'water_7':       return data.waterStreak >= 7
+    case 'first_project': return projects.total >= 1
+    case 'project_done':  return projects.done >= 1
+    case 'level_10':      return xp >= 1000
+    case 'level_25':      return xp >= 2500
+    case 'first_review':  return data.reviews >= 1
+    case 'brain_dump_10': return brainItems >= 10
+    default: return false
+  }
+}
+
+function computeStreakFromLogs(logCount) {
+  // Simplified — actual streak calculated from dates in StatsGrid
+  // Here we just use count as a proxy, real streak is in HabitTracker
+  return 0
+}
+
+// ── Habit Tracker ─────────────────────────────────────────────
+function HabitTracker({ userId }) {
+  const [monthOffset, setMonthOffset] = useState(0)
+  const [routines,    setRoutines]    = useState([])
+  const [logDates,    setLogDates]    = useState({})   // routineId → Set of date strings
+  const [healthDates, setHealthDates] = useState(new Set())
+  const [loading,     setLoading]     = useState(true)
+
+  useEffect(() => {
+    if (!userId) { setLoading(false); return }
+    load()
+  }, [userId, monthOffset])  // eslint-disable-line
+
+  async function load() {
+    setLoading(true)
+    const now   = new Date()
+    const year  = now.getFullYear()
+    const month = now.getMonth() + monthOffset
+    const firstDay = new Date(year, month, 1)
+    const lastDay  = new Date(year, month + 1, 0)
+    const start = firstDay.toISOString().split('T')[0]
+    const end   = lastDay.toISOString().split('T')[0]
+
+    const [routRes, logRes, healthRes] = await Promise.all([
+      supabase.from('routines').select('id,title').eq('user_id', userId).limit(8),
+      supabase.from('routine_logs').select('routine_id,started_at,status')
+        .eq('user_id', userId).eq('status', 'completed')
+        .gte('started_at', start).lte('started_at', end + 'T23:59:59'),
+      supabase.from('health_logs').select('date')
+        .eq('user_id', userId).gte('date', start).lte('date', end),
+    ])
+
+    const routs = routRes.data || []
+    const logs  = logRes.data  || []
+    const health = healthRes.data || []
+
+    const dateMap = {}
+    routs.forEach(r => { dateMap[r.id] = new Set() })
+    logs.forEach(l => {
+      const d = l.started_at?.split('T')[0]
+      if (d && dateMap[l.routine_id]) dateMap[l.routine_id].add(d)
+    })
+
+    setRoutines(routs)
+    setLogDates(dateMap)
+    setHealthDates(new Set(health.map(h => h.date)))
+    setLoading(false)
+  }
+
+  const now      = new Date()
+  const year     = now.getFullYear()
+  const month    = now.getMonth() + monthOffset
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const todayStr = now.toISOString().split('T')[0]
+  const monthLabel = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(year, month, i + 1)
+    return d.toISOString().split('T')[0]
+  })
+
+  // Grid columns: name col + one per day
+  const colCount = 1 + days.length
+  const gridStyle = {
+    gridTemplateColumns: `100px repeat(${days.length}, 22px)`,
+  }
+
+  const rows = [
+    ...routines.map(r => ({ id: r.id, label: r.title, type: 'routine', dates: logDates[r.id] || new Set() })),
+    ...(healthDates.size > 0 || !loading ? [{ id: 'health', label: '💚 Health', type: 'health', dates: healthDates }] : []),
+  ]
+
+  return (
+    <div className="habit-section">
+      <div className="habit-section-head">
+        <span className="section-label">Habit tracker</span>
+        <div className="habit-month-nav">
+          <button className="habit-month-btn" onClick={() => setMonthOffset(o => o - 1)}>‹</button>
+          <span className="habit-month-label">{monthLabel}</span>
+          <button className="habit-month-btn" onClick={() => setMonthOffset(o => o + 1)}
+            disabled={monthOffset >= 0}>›</button>
+        </div>
+      </div>
+
+      <div className="habit-grid-wrap">
+        {loading ? (
+          <div className="habit-loading">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="habit-empty">Add routines to start tracking habits</div>
+        ) : (
+          <>
+            <div className="habit-grid" style={gridStyle}>
+              {/* Header row — day numbers */}
+              <div className="habit-header-cell" />
+              {days.map(d => (
+                <div key={d} className="habit-header-cell">
+                  {parseInt(d.split('-')[2], 10)}
+                </div>
+              ))}
+              {/* Data rows */}
+              {rows.map(row => (
+                <div key={row.id} className="habit-grid-row">
+                  <div className="habit-name-cell" title={row.label}>{row.label}</div>
+                  {days.map(d => {
+                    const done   = row.dates.has(d)
+                    const future = d > todayStr
+                    const today  = d === todayStr
+                    return (
+                      <div key={d}
+                        className={[
+                          'habit-day-cell',
+                          done  ? (row.type === 'health' ? 'done-health' : 'done') : '',
+                          future ? 'future' : '',
+                          today  ? 'today'  : '',
+                        ].filter(Boolean).join(' ')}
+                        title={`${row.label} · ${d}`}
+                      />
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+            <div className="habit-legend">
+              <div className="habit-legend-item">
+                <div className="habit-legend-dot" style={{ background: 'var(--accent)' }} />
+                Routine done
+              </div>
+              <div className="habit-legend-item">
+                <div className="habit-legend-dot" style={{ background: '#10b981' }} />
+                Health logged
+              </div>
+              <div className="habit-legend-item">
+                <div className="habit-legend-dot" style={{ background: 'var(--bg3)', border: '1px solid var(--border2)' }} />
+                Not done
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Badges panel ──────────────────────────────────────────────
+function BadgesPanel({ userId, xp }) {
+  const [earned,  setEarned]  = useState(new Set())
+  const [dates,   setDates]   = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!userId) { setLoading(false); return }
+    checkAndAwardBadges()
+  }, [userId, xp])  // eslint-disable-line
+
+  async function checkAndAwardBadges() {
+    setLoading(true)
+    // Load all data needed for badge checks
+    const [
+      tasksRes, routineLogsRes, focusRes,
+      journalsRes, hobbiesRes, projectsRes,
+      waterRes, reviewsRes, brainRes, existingRes
+    ] = await Promise.all([
+      supabase.from('tasks').select('id,status').eq('user_id', userId),
+      supabase.from('routine_logs').select('id,started_at,status').eq('user_id', userId),
+      supabase.from('focus_sessions').select('id,duration_min').eq('user_id', userId),
+      supabase.from('journal_entries').select('id').eq('user_id', userId),
+      supabase.from('hobby_sessions').select('id,duration_min').eq('user_id', userId),
+      supabase.from('projects').select('id,status').eq('user_id', userId),
+      supabase.from('health_logs').select('date,water_ml,water_goal_ml').eq('user_id', userId).order('date', { ascending: false }),
+      supabase.from('reviews').select('id').eq('user_id', userId),
+      supabase.from('brain_dump_items').select('id').eq('user_id', userId),
+      supabase.from('user_badges').select('badge_key,earned_at').eq('user_id', userId),
+    ])
+
+    const existingBadges = existingRes.data || []
+    const earnedSet  = new Set(existingBadges.map(b => b.badge_key))
+    const dateMap    = {}
+    existingBadges.forEach(b => { dateMap[b.badge_key] = b.earned_at })
+
+    // Compute stats
+    const doneTasks    = (tasksRes.data || []).filter(t => t.status === 'done').length
+    const completedLogs= (routineLogsRes.data || []).filter(r => r.status === 'completed')
+    const logDateSet   = new Set(completedLogs.map(l => l.started_at?.split('T')[0]).filter(Boolean))
+    const routineStreak = computeStreakDates([...logDateSet])
+    const focusSessions = {
+      count:     (focusRes.data || []).length,
+      totalMins: (focusRes.data || []).reduce((a, s) => a + (s.duration_min || 0), 0),
+    }
+    const journals   = (journalsRes.data || []).length
+    const hobbySessions = (hobbiesRes.data || []).length
+    const hobbyMins  = (hobbiesRes.data || []).reduce((a, h) => a + (h.duration_min || 0), 0)
+    const projects   = {
+      total: (projectsRes.data || []).length,
+      done:  (projectsRes.data || []).filter(p => p.status === 'done').length,
+    }
+    const reviews    = (reviewsRes.data || []).length
+    const brainItems = (brainRes.data || []).length
+
+    // Water streak
+    const waterLogs   = (waterRes.data || [])
+    const waterStreak = computeStreakDates(
+      waterLogs.filter(h => h.water_ml >= (h.water_goal_ml || 2000)).map(h => h.date)
+    )
+
+    const data = {
+      doneTasks, routineLogs: completedLogs.length,
+      focusSessions, journals, hobbySessions, hobbyMins,
+      projects, xp, reviews, brainItems, waterStreak,
+      streak: routineStreak,
+    }
+
+    // Check which badges are newly earned
+    const newBadges = []
+    for (const def of BADGE_DEFS) {
+      if (!earnedSet.has(def.key) && checkEarned(def.key, data)) {
+        newBadges.push(def.key)
+      }
+    }
+
+    // Also fix checkEarned to use real streak
+    // Re-check streak badges with real value
+    if (!earnedSet.has('streak_7')  && routineStreak >= 7)  newBadges.push('streak_7')
+    if (!earnedSet.has('streak_30') && routineStreak >= 30) newBadges.push('streak_30')
+    const uniqueNew = [...new Set(newBadges)]
+
+    if (uniqueNew.length > 0) {
+      await supabase.from('user_badges').upsert(
+        uniqueNew.map(key => ({ user_id: userId, badge_key: key, earned_at: new Date().toISOString() })),
+        { onConflict: 'user_id,badge_key' }
+      )
+      uniqueNew.forEach(key => {
+        earnedSet.add(key)
+        dateMap[key] = new Date().toISOString()
+      })
+    }
+
+    setEarned(earnedSet)
+    setDates(dateMap)
+    setLoading(false)
+  }
+
+  if (loading) return null
+  const earnedBadges = BADGE_DEFS.filter(b => earned.has(b.key))
+  const lockedBadges = BADGE_DEFS.filter(b => !earned.has(b.key))
+
+  return (
+    <div className="badges-section">
+      <div className="home-section-head">
+        <span className="section-label">Badges</span>
+        <span className="section-sub">{earnedBadges.length} / {BADGE_DEFS.length} earned</span>
+      </div>
+      <div className="badges-grid">
+        {[...earnedBadges, ...lockedBadges].map(b => (
+          <div key={b.key} className={`badge-card ${earned.has(b.key) ? 'earned' : 'locked'}`}>
+            <span className="badge-emoji">{b.emoji}</span>
+            <span className="badge-name">{b.name}</span>
+            <span className="badge-desc">{b.desc}</span>
+            {earned.has(b.key) && dates[b.key] && (
+              <span className="badge-date">
+                {new Date(dates[b.key]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function computeStreakDates(dateStrings) {
+  if (!dateStrings.length) return 0
+  const s = new Set(dateStrings)
+  const today = new Date()
+  let cursor = new Date(today)
+  if (!s.has(cursor.toISOString().split('T')[0])) cursor.setDate(cursor.getDate() - 1)
+  let streak = 0
+  for (let i = 0; i < 400; i++) {
+    const ds = cursor.toISOString().split('T')[0]
+    if (s.has(ds)) { streak++; cursor.setDate(cursor.getDate() - 1) }
+    else break
+  }
+  return streak
+}
+
 // ── Main Home ──────────────────────────────────────────────────
 export default function Home({ userId }) {
   const [xp,       setXp]       = useState(() => getXP())
@@ -626,6 +970,10 @@ export default function Home({ userId }) {
 
       {/* ── Stats dashboard ── */}
       <StatsGrid userId={userId} />
+
+      <HabitTracker userId={userId} />
+
+      <BadgesPanel userId={userId} xp={xp} />
 
     </div>
   )

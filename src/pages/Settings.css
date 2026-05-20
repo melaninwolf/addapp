@@ -210,3 +210,34 @@
 .health-metric-opt.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 .health-metric-opt.soon { opacity: 0.45; cursor: default; }
 .health-metric-opt .soon { font-size: 10px; font-weight: 600; color: var(--text3); margin-left: auto; }
+
+/* ── Motivation Profile ── */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.profile-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+  font-family: inherit;
+}
+.profile-opt:hover { border-color: var(--accent); }
+.profile-opt.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.profile-emoji  { font-size: 22px; }
+.profile-name   { font-size: 13px; font-weight: 700; color: var(--text); }
+.profile-tagline { font-size: 11px; color: var(--text3); line-height: 1.4; }

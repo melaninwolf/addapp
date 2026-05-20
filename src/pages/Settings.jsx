@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { ACCENT_COLORS, FONTS } from '../settings'
+import { MOTIVATION_PROFILES, getMotivationProfile, setMotivationProfile } from '../xp'
 import './Settings.css'
 
 const MODES = [
@@ -24,6 +26,12 @@ const ALL_HEALTH_METRICS = [
 
 export default function Settings({ settings, onUpdate, onBack }) {
   const { mode, color, font, healthEnabled = true, healthMetrics = ['energy','sleep','stress'] } = settings
+  const [profile, setProfile] = useState(() => getMotivationProfile())
+
+  function pickProfile(id) {
+    setMotivationProfile(id)
+    setProfile(id)
+  }
 
   function toggleMetric(id) {
     const next = healthMetrics.includes(id)
@@ -109,6 +117,36 @@ export default function Settings({ settings, onUpdate, onBack }) {
         </div>
       </section>
 
+      {/* ── Motivation Profile ── */}
+      <section className="settings-section">
+        <h2 className="section-title">Motivation Profile</h2>
+        <p className="ocean-note" style={{ marginTop: 0, marginBottom: 14 }}>
+          What drives you? Your profile shapes how AddApp talks to you.
+        </p>
+        <div className="profile-grid">
+          {MOTIVATION_PROFILES.map(p => (
+            <button
+              key={p.id}
+              className={`profile-opt${profile === p.id ? ' active' : ''}`}
+              onClick={() => pickProfile(p.id)}
+              aria-pressed={profile === p.id}
+            >
+              <span className="profile-emoji">{p.emoji}</span>
+              <span className="profile-name">{p.name}</span>
+              <span className="profile-tagline">{p.tagline}</span>
+            </button>
+          ))}
+        </div>
+        {profile && (() => {
+          const p = MOTIVATION_PROFILES.find(pr => pr.id === profile)
+          return p ? (
+            <p className="ocean-note" style={{ marginTop: 10 }}>
+              {p.emoji} <strong>{p.name}:</strong> {p.description}
+            </p>
+          ) : null
+        })()}
+      </section>
+
       {/* ── Health ── */}
       <section className="settings-section">
         <h2 className="section-title">Health</h2>
@@ -147,7 +185,7 @@ export default function Settings({ settings, onUpdate, onBack }) {
             </div>
           </>
         )}
-      </section>
+        </section>
 
     </div>
   )

@@ -1375,3 +1375,51 @@
   .cal-day-layout { max-width: 100%; }
   .day-grid-scroll { max-height: calc(100vh - 220px); }
 }
+
+/* ── Task Cal Modal ────────────────────────────────────────── */
+.tcm-sheet { max-width: 420px; }
+
+.tcm-done-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  transition: border-color 0.15s;
+}
+.tcm-done-btn:hover { border-color: var(--green); }
+
+.tcm-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.tcm-status-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+.tcm-status-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tcm-status-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

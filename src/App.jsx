@@ -13,10 +13,11 @@ import Journal       from './pages/Journal.jsx'
 import Hobbies       from './pages/Hobbies.jsx'
 import UsageTracker  from './pages/UsageTracker.jsx'
 import BrainDump    from './pages/BrainDump.jsx'
+import Reviews      from './pages/Reviews.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
-import { getXP, getLevel, getXPIntoLevel,
+import { getXP, getLevel, getXPIntoLevel, getLevelTitle,
          getMatter, getAntimatter, getMatterProgress, getAntimatterProgress,
          getAUTraveled, getCurrentDestination, getNextDestination } from './xp'
 import { supabase } from './supabase'
@@ -300,6 +301,13 @@ function AppShell({ user }) {
             <span className="nav-icon">📱</span>
             {showFull && <span>Screen Time</span>}
           </NavLink>
+
+          <NavLink to="/reviews"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Reviews' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">📊</span>
+            {showFull && <span>Reviews</span>}
+          </NavLink>
         </div>
 
         <div className="sb-action-btns">
@@ -321,8 +329,13 @@ function AppShell({ user }) {
             {/* Level + gram progress */}
             <div className="mam-level-row">
               <span className="mam-lvl">LVL {getLevel(xp)}</span>
-              {showFull && <span className="mam-grams">{getXPIntoLevel(xp)}g / 100g</span>}
+              {showFull && <span className="mam-title">{getLevelTitle(xp)}</span>}
             </div>
+            {showFull && (
+              <div className="mam-gram-row">
+                <span className="mam-grams">{getXPIntoLevel(xp)}g / 100g</span>
+              </div>
+            )}
 
             {/* Current destination */}
             {showFull && (() => {
@@ -385,6 +398,7 @@ function AppShell({ user }) {
           <Route path="/hobbies"     element={<Hobbies       userId={user?.id} />} />
           <Route path="/braindump"    element={<BrainDump     userId={user?.id} />} />
           <Route path="/usage"        element={<UsageTracker  userId={user?.id} />} />
+          <Route path="/reviews"      element={<Reviews       userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />
@@ -408,6 +422,35 @@ export default function App() {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null)
+      if (event === 'SIGNED_IN') syncXPFromDb()
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--bg)', color: 'var(--text3)', fontSize: 14
+      }}>
+        Loading...
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <BrowserRouter><Auth /></BrowserRouter>
+  }
+
+  return (
+    <BrowserRouter>
+      <AppShell user={user} />
+    </BrowserRouter>
+  )
+}
+ption } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
       if (event === 'SIGNED_IN') syncXPFromDb()
     })

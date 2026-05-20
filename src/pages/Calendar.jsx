@@ -173,7 +173,7 @@ function GCalEventCard({ event }) {
 }
 
 // ─── MONTH VIEW ───────────────────────────────────────────────
-function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onViewEvent, onEditLog }) {
+function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onViewEvent, onViewTask, onEditLog }) {
   const [year,  setYear]  = useState(selected.getFullYear())
   const [month, setMonth] = useState(selected.getMonth())
 
@@ -268,12 +268,17 @@ function MonthView({ today, selected, setSelected, routinesForDate, gcalEventsFo
               </div>
             ))}
             {selTasks.map(t => (
-              <div key={`task-${t.id}`} className="cal-detail-item"
-                style={{ borderLeft: `3px solid ${t._catColor || 'var(--green)'}`, opacity: t._done ? 0.5 : 1 }}>
+              <div key={`task-${t.id}`} className="cal-detail-item cal-detail-item-click"
+                style={{ borderLeft: `3px solid ${t._catColor || 'var(--green)'}`, opacity: t._done ? 0.5 : 1 }}
+                onClick={() => onViewTask && onViewTask(t)}>
                 <div className="cdi-emoji" style={{ background: t._catColor ? t._catColor + '20' : 'var(--green-bg)' }}>✅</div>
                 <div className="cdi-info">
                   <div className="cdi-name" style={{ textDecoration: t._done ? 'line-through' : 'none' }}>{t.title}</div>
-                  <div className="cdi-meta">{t.start_time ? fmtTime(t.start_time) : 'All day'}</div>
+                  <div className="cdi-meta">
+                    {t.start_time ? fmtTime(t.start_time) : 'All day'}
+                    {t._catName && <> · {t._catName}</>}
+                    {t._raw?.priority && <> · {t._raw.priority}</>}
+                  </div>
                 </div>
               </div>
             ))}
@@ -353,7 +358,7 @@ const WEEK_FILTERS = [
   { key: 'events',   label: 'Events',   emoji: '📅' },
 ]
 
-function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onEditLog, onUpdateBlock }) {
+function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onEditLog, onUpdateBlock, onViewTask }) {
   const [anchor,  setAnchor]  = useState(() => new Date(selected))
   const [filters, setFilters] = useState(new Set(['routines', 'focus', 'tasks', 'events']))
   const wvScrollRef = useRef(null)
@@ -573,7 +578,9 @@ function WeekView({ today, selected, setSelected, routinesForDate, gcalEventsFor
                 {allDayItems.length > 0 && (
                   <div className="wv-allday">
                     {allDayItems.slice(0, 2).map((item, j) => (
-                      <div key={j} className="wv-allday-chip">
+                      <div key={j} className="wv-allday-chip"
+                        style={{ cursor: item._isTask ? 'pointer' : 'default' }}
+                        onClick={item._isTask ? () => onViewTask && onViewTask(item) : undefined}>
                         {item.emoji || (item.summary ? '📅' : '✅')} {item.name || item.title || item.summary || '—'}
                       </div>
                     ))}
@@ -1133,7 +1140,7 @@ function hourLabel(h) {
   return `${h - 12} PM`
 }
 
-function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onUpdateBlock, onViewEvent, onEditLog }) {
+function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForDate, customEventsForDate, tasksForDate, onUpdateBlock, onViewEvent, onViewTask, onEditLog }) {
   const [now, setNow] = useState(() => new Date())
   const scrollRef = useRef(null)
   const dragRef   = useRef(null)
@@ -1274,6 +1281,8 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
       if (d) {
         if (!d.moved && d.blockType === 'custom') {
           onViewEvent && onViewEvent(d.data)
+        } else if (!d.moved && d.blockType === 'task') {
+          onViewTask && onViewTask(d.data)
         } else if (d.moved && d.currentStartMin !== d.originalStartMin) {
           onUpdateBlock && onUpdateBlock(d.blockType, d.eventId, {
             start_time: minsToTime(d.currentStartMin),
@@ -1334,7 +1343,9 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
                       color:       t._catColor || 'var(--green)',
                       opacity:     t._done ? 0.5 : 1,
                       textDecoration: t._done ? 'line-through' : 'none',
-                    }}>
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => onViewTask && onViewTask(t)}>
                     ✅ {t.title}
                   </div>
                 ))}
@@ -1513,6 +1524,116 @@ function DayView({ today, selected, setSelected, routinesForDate, gcalEventsForD
   )
 }
 
+// ─── Task Quick-View Modal (full task model) ──────────────────
+const TASK_PRIORITIES = [
+  { key: 'high',   label: 'High',   color: '#ef4444' },
+  { key: 'medium', label: 'Medium', color: '#f59e0b' },
+  { key: 'low',    label: 'Low',    color: '#4ade80' },
+]
+const TASK_STATUSES = [
+  { key: 'backlog',     label: 'Backlog'     },
+  { key: 'todo',        label: 'To Do'       },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'done',        label: 'Done'        },
+]
+
+function TaskCalModal({ task, catName, catColor, onClose, onToggleDone, onUpdateStatus }) {
+  if (!task) return null
+  const raw      = task._raw || task
+  const priInfo  = TASK_PRIORITIES.find(p => p.key === raw.priority)
+  const isDone   = task._done
+  const dueLabel = (() => {
+    if (!raw.due_date) return null
+    const today = new Date(); today.setHours(0,0,0,0)
+    const date  = new Date(raw.due_date + 'T00:00:00')
+    const diff  = Math.round((date - today) / 86400000)
+    if (diff === 0)  return 'Today'
+    if (diff === 1)  return 'Tomorrow'
+    if (diff === -1) return 'Yesterday'
+    if (diff < 0)    return `${Math.abs(diff)}d overdue`
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  })()
+  const isOverdue = (() => {
+    if (!raw.due_date) return false
+    const today = new Date(); today.setHours(0,0,0,0)
+    return new Date(raw.due_date + 'T00:00:00') < today && !isDone
+  })()
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-sheet modal-sheet-detail tcm-sheet" onClick={e => e.stopPropagation()}>
+
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+            <div className="tcm-done-btn" onClick={onToggleDone}
+              title={isDone ? 'Mark undone' : 'Mark done'}
+              style={{ borderColor: catColor || 'var(--green)' }}>
+              {isDone && <span style={{ color: catColor || 'var(--green)' }}>✓</span>}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="modal-title-text" style={{
+                fontSize: 15, textDecoration: isDone ? 'line-through' : 'none',
+                color: isDone ? 'var(--text3)' : 'var(--text)',
+              }}>{raw.title}</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                {catName && (
+                  <span className="tcm-tag" style={{ borderColor: catColor || 'var(--border2)', color: catColor || 'var(--text2)' }}>
+                    {catName}
+                  </span>
+                )}
+                {priInfo && (
+                  <span className="tcm-tag" style={{ borderColor: priInfo.color, color: priInfo.color }}>
+                    {priInfo.label}
+                  </span>
+                )}
+                {dueLabel && (
+                  <span className="tcm-tag" style={{ borderColor: isOverdue ? '#ef4444' : 'var(--border2)', color: isOverdue ? '#ef4444' : 'var(--text2)' }}>
+                    📅 {dueLabel}{raw.due_time ? ` · ${fmtTime(raw.due_time)}` : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="modal-body" style={{ paddingTop: 12 }}>
+          {/* Status row */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            {TASK_STATUSES.map(s => (
+              <button key={s.key}
+                className={`tcm-status-btn${raw.status === s.key ? ' active' : ''}`}
+                onClick={() => onUpdateStatus(s.key)}
+              >{s.label}</button>
+            ))}
+          </div>
+
+          {/* Notes */}
+          {raw.notes && (
+            <div className="detail-row">
+              <span className="detail-icon">📝</span>
+              <div className="detail-val detail-notes">{raw.notes}</div>
+            </div>
+          )}
+
+          {/* Project */}
+          {raw.project_id && (
+            <div className="detail-row">
+              <span className="detail-icon">📁</span>
+              <div className="detail-val" style={{ color: 'var(--text2)', fontSize: 13 }}>Linked to project</div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <div style={{ flex: 1 }} />
+          <button className="modal-btn modal-btn-cancel" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── ROOT ─────────────────────────────────────────────────────
 export default function Calendar({ userId }) {
   const today = new Date()
@@ -1530,6 +1651,7 @@ export default function Calendar({ userId }) {
   const [editLogModal,   setEditLogModal]   = useState(null) // null | { logId, name, emoji }
   const [editLogStart,   setEditLogStart]   = useState('')
   const [editLogEnd,     setEditLogEnd]     = useState('')
+  const [viewingTask,    setViewingTask]    = useState(null) // task object from tasksForDate()
 
   // Google Calendar state
   const [gisReady,    setGisReady]    = useState(false)
@@ -1732,9 +1854,33 @@ export default function Calendar({ userId }) {
           start_time: t.due_time || null,
           all_day:    !t.due_time,
           _catColor:  cat?.color || null,
+          _catName:   cat?.name  || null,
           _done:      t.status === 'done',
+          _raw:       t,
         }
       })
+  }
+
+  // ── Task quick actions from calendar ─────────────────────────
+  async function calToggleTaskDone(t) {
+    if (!userId) return
+    const newStatus = t._done ? 'todo' : 'done'
+    const { error } = await supabase.from('tasks')
+      .update({ status: newStatus }).eq('id', t.id).eq('user_id', userId)
+    if (!error) {
+      setTasks(prev => prev.map(x => x.id === t.id ? { ...x, status: newStatus } : x))
+      setViewingTask(prev => prev ? { ...prev, _done: newStatus === 'done', _raw: { ...prev._raw, status: newStatus } } : null)
+    }
+  }
+
+  async function calUpdateTaskStatus(t, status) {
+    if (!userId) return
+    const { error } = await supabase.from('tasks')
+      .update({ status }).eq('id', t.id).eq('user_id', userId)
+    if (!error) {
+      setTasks(prev => prev.map(x => x.id === t.id ? { ...x, status } : x))
+      setViewingTask(prev => prev ? { ...prev, _done: status === 'done', _raw: { ...prev._raw, status } } : null)
+    }
   }
 
   // ── CRUD ─────────────────────────────────────────────────────
@@ -1863,18 +2009,18 @@ export default function Calendar({ userId }) {
         <MonthView today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
           customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
-          onViewEvent={handleViewEvent} onEditLog={openCalEditLog} />
+          onViewEvent={handleViewEvent} onViewTask={setViewingTask} onEditLog={openCalEditLog} />
       ) : view === 'week' ? (
         <WeekView  today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
           customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
-          onEditLog={openCalEditLog} onUpdateBlock={updateBlock} />
+          onEditLog={openCalEditLog} onUpdateBlock={updateBlock} onViewTask={setViewingTask} />
       ) : (
         <DayView   today={today} selected={selected} setSelected={setSelected}
           routinesForDate={routinesForDate} gcalEventsForDate={gcalEventsForDate}
           customEventsForDate={customEventsForDate} tasksForDate={tasksForDate}
           onUpdateBlock={updateBlock}
-          onViewEvent={handleViewEvent} onEditLog={openCalEditLog} />
+          onViewEvent={handleViewEvent} onViewTask={setViewingTask} onEditLog={openCalEditLog} />
       )}
 
       {/* Add modal */}
@@ -1901,6 +2047,18 @@ export default function Calendar({ userId }) {
         onDelete={() => deleteCalendarEvent(editingEvent.id)}
         initialEvent={editingEvent}
       />
+
+      {/* Task quick-view */}
+      {viewingTask && (
+        <TaskCalModal
+          task={viewingTask}
+          catName={viewingTask._catName}
+          catColor={viewingTask._catColor}
+          onClose={() => setViewingTask(null)}
+          onToggleDone={() => calToggleTaskDone(viewingTask)}
+          onUpdateStatus={s => calUpdateTaskStatus(viewingTask, s)}
+        />
+      )}
 
       {/* Edit routine log times modal */}
       {editLogModal && (
