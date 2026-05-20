@@ -989,6 +989,10 @@ export default function Routines({ userId }) {
   const [editLogModal, setEditLogModal]   = useState(null) // null | { log, routine }
   const [editLogStart, setEditLogStart]   = useState('')
   const [editLogEnd,   setEditLogEnd]     = useState('')
+  const [historyModal, setHistoryModal]   = useState(null)  // null | routine
+  const [historyLogs,  setHistoryLogs]    = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyEdit,  setHistoryEdit]    = useState(null)  // null | { id, start, end }
 
   // Load routines from Supabase on mount
   useEffect(() => {
@@ -1110,6 +1114,48 @@ export default function Routines({ userId }) {
     setEditLogModal({ log, routine })
   }
 
+  async function openHistory(routine) {
+    setHistoryModal(routine)
+    setHistoryLogs([])
+    setHistoryEdit(null)
+    setHistoryLoading(true)
+      .select('id, started_at, ended_at, status, step_index')
+      .eq('user_id', userId)
+      .eq('routine_id', routine.id)
+      .order('started_at', { ascending: false })
+      .limit(200)
+    setHistoryLogs(data || [])
+    setHistoryLoading(false)
+  }
+
+  async function saveHistoryEdit() {
+    if (!historyEdit) return
+    const { id, start, end } = historyEdit
+    const log = historyLogs.find(l => l.id === id)
+    if (!log) return
+    const base = new Date(log.started_at)
+    const toISO = (hhmm, baseDate) => {
+      if (!hhmm) return null
+      const [h, m] = hhmm.split(':').map(Number)
+      const d = new Date(baseDate); d.setHours(h, m, 0, 0)
+      return d.toISOString()
+    }
+    const updates = {
+      started_at: toISO(start, base) || log.started_at,
+      ended_at:   toISO(end,   base) || null,
+    }
+    await supabase.from('routine_logs').update(updates).eq('id', id)
+    setHistoryLogs(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l))
+    setTodayLogs(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l))
+    setHistoryEdit(null)
+  }
+
+  async function deleteHistoryLog(logId) {
+    await supabase.from('routine_logs').delete().eq('id', logId)
+    setHistoryLogs(prev => prev.filter(l => l.id !== logId))
+    setTodayLogs(prev => prev.filter(l => l.id !== logId))
+  }
+
   async function saveEditLog() {
     if (!editLogModal) return
     const { log } = editLogModal
@@ -1162,12 +1208,12 @@ export default function Routines({ userId }) {
       <div className="routines-stats-bar">
         <span className="routines-stats-text">
           {doneToday > 0
-            ? <><span className="stats-done">{doneToday} done today · +{doneToday * 5}g matter</span></>
-            : <span className="stats-hint">Nothing done yet today — start a routine 🚀</span>
+            ? <><span className="stats-done">{doneToday} done today &middot; +{doneToday * 5}g matter</span></>
+            : <span className="stats-hint">Nothing done yet today &mdash; start a routine \U0001f680</span>
           }
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-ghost btn-sm" onClick={() => setShowTemplates(true)}>📋 Templates</button>
+          <button className="btn-ghost btn-sm" onClick={() => setShowTemplates(true)}>\U0001f4cb Templates</button>
           <button className="btn-primary btn-sm" onClick={() => setModal('new')}>+ New routine</button>
         </div>
       </div>
@@ -1192,7 +1238,7 @@ export default function Routines({ userId }) {
               <div className="rc-info">
                 <div className="rc-name-row">
                   <div className="rc-name">{r.name}</div>
-                  {r.type === 'trigger' && <span className="rc-trigger-badge">🕹️ Trigger</span>}
+                  {r.type === 'trigger' && <span className="rc-trigger-badge">\U0001f579️ Trigger</span>}
                   {isDoneToday && todayLog.status === 'marked_done' && (
                     <button className="rc-done-badge" onClick={() => undoMarkDone(r.id)} title="Click to undo">✓ done today ↩</button>
                   )}
@@ -1226,7 +1272,8 @@ export default function Routines({ userId }) {
               {todayLog && (
                 <button className="btn-ghost btn-sm" onClick={() => openEditLog(r)}>✏ Times</button>
               )}
-              <button className="rc-delete-btn" onClick={() => setDeleteConfirm(r)} title="Delete">🗑</button>
+              <button className="btn-ghost btn-sm" onClick={() => openHistory(r)}>\U0001f4cb History</button>
+              <button className="rc-delete-btn" onClick={() => setDeleteConfirm(r)} title="Delete">\U0001f5d1</button>
             </div>
           </div>
         )}
@@ -1241,7 +1288,7 @@ export default function Routines({ userId }) {
             )}
             {triggerList.length > 0 && (
               <>
-                <div className="section-label section-label-trigger">🕹️ Triggers</div>
+                <div className="section-label section-label-trigger">\U0001f579️ Triggers</div>
                 <div className="routine-grid">{triggerList.map(renderCard)}</div>
               </>
             )}
@@ -1252,7 +1299,6 @@ export default function Routines({ userId }) {
       {showTemplates && (
         <TemplatesModal
           onSelect={t => {
-            // Pre-fill the RoutineModal with template data (no id = new)
             setModal({ ...t, steps: t.steps.map((s, i) => ({ ...s, id: i + 1 })) })
           }}
           onClose={() => setShowTemplates(false)}
@@ -1272,11 +1318,11 @@ export default function Routines({ userId }) {
           <div className="modal" style={{maxWidth: 400}} onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Delete routine</h2>
-              <button className="modal-close" onClick={() => setDeleteConfirm(null)}>×</button>
+              <button className="modal-close" onClick={() => setDeleteConfirm(null)}>\xd7</button>
             </div>
             <div className="modal-body">
               <p style={{fontSize: 14, color: 'var(--text2)', lineHeight: 1.6}}>
-                Are you sure you want to delete <strong style={{color: 'var(--text)'}}>"{deleteConfirm.name}"</strong> routine? This can't be undone.
+                Are you sure you want to delete <strong style={{color: 'var(--text)'}}>&ldquo;{deleteConfirm.name}&rdquo;</strong> routine? This can&apos;t be undone.
               </p>
             </div>
             <div className="modal-foot">
@@ -1292,7 +1338,7 @@ export default function Routines({ userId }) {
           <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Edit session times</h2>
-              <button className="modal-close" onClick={() => setEditLogModal(null)}>×</button>
+              <button className="modal-close" onClick={() => setEditLogModal(null)}>\xd7</button>
             </div>
             <div className="modal-body">
               <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
@@ -1315,12 +1361,105 @@ export default function Routines({ userId }) {
         </div>
       )}
 
+      {historyModal && (
+        <div className="modal-overlay" onClick={() => { setHistoryModal(null); setHistoryEdit(null) }}>
+          <div className="modal" style={{maxWidth:480, maxHeight:'80vh', display:'flex', flexDirection:'column'}} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{historyModal.emoji} {historyModal.name} &mdash; history</h2>
+              <button className="modal-close" onClick={() => { setHistoryModal(null); setHistoryEdit(null) }}>\xd7</button>
+            </div>
+            <div className="modal-body" style={{overflowY:'auto', flex:1}}>
+              {historyLoading ? (
+                <div style={{textAlign:'center', padding:'2rem 0', color:'var(--text3)', fontSize:13}}>Loading…</div>
+              ) : historyLogs.length === 0 ? (
+                <div style={{textAlign:'center', padding:'2rem 0', color:'var(--text3)', fontSize:13}}>No sessions logged yet.</div>
+              ) : (() => {
+                const toHHMM = ts => {
+                  if (!ts) return null
+                  const d = new Date(ts)
+                  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+                }
+                return (
+                  <>
+                    <div style={{fontSize:12, color:'var(--text3)', marginBottom:'0.75rem'}}>
+                      {historyLogs.length} session{historyLogs.length !== 1 ? 's' : ''} logged
+                    </div>
+                    {historyLogs.map(log => {
+                      const dateLabel = new Date(log.started_at).toLocaleDateString('en-US', {
+                        weekday:'short', month:'short', day:'numeric', year:'numeric',
+                      })
+                      const startStr = toHHMM(log.started_at)
+                      const endStr   = toHHMM(log.ended_at)
+                      const durMins  = log.started_at && log.ended_at
+                        ? Math.round((new Date(log.ended_at) - new Date(log.started_at)) / 60000)
+                        : null
+                      const statusLabel = log.status === 'completed'    ? '✓ Completed'
+                                        : log.status === 'marked_done'  ? '✓ Marked done'
+                                        : log.status === 'started'      ? '↺ In progress'
+                                        : log.status
+                      const statusColor = log.status === 'completed'   ? 'var(--accent)'
+                                        : log.status === 'marked_done' ? 'var(--text2)'
+                                        : 'var(--text3)'
+                      const isEditing = historyEdit?.id === log.id
+
+                      return (
+                        <div key={log.id} style={{borderBottom:'1px solid var(--border)', padding:'0.75rem 0'}}>
+                          <div style={{display:'flex', alignItems:'flex-start', gap:'0.5rem'}}>
+                            <div style={{flex:1, minWidth:0}}>
+                              <div style={{fontSize:13, fontWeight:600, color:'var(--text)', lineHeight:1.3}}>{dateLabel}</div>
+                              <div style={{fontSize:12, color:'var(--text2)', marginTop:3}}>
+                                {startStr ? `${startStr}${endStr ? ` – ${endStr}` : ''}` : '—'}
+                                {durMins !== null && durMins > 0 ? ` · ${durMins} min` : ''}
+                              </div>
+                              <div style={{fontSize:11, color:statusColor, marginTop:2}}>{statusLabel}</div>
+                            </div>
+                            <button
+                              className="btn-ghost btn-sm"
+                              style={{padding:'3px 8px', fontSize:11, flexShrink:0}}
+                              onClick={() => isEditing
+                                ? setHistoryEdit(null)
+                                : setHistoryEdit({ id: log.id, start: toHHMM(log.started_at) || '', end: toHHMM(log.ended_at) || '' })
+                              }
+                            >{isEditing ? 'Cancel' : '✏'}</button>
+                            <button
+                              className="rc-delete-btn"
+                              style={{flexShrink:0, fontSize:13}}
+                              onClick={() => deleteHistoryLog(log.id)}
+                              title="Delete this entry"
+                            >\U0001f5d1</button>
+                          </div>
+                          {isEditing && (
+                            <div style={{marginTop:'0.75rem', display:'flex', gap:'0.75rem', alignItems:'flex-end', flexWrap:'wrap'}}>
+                              <div className="field" style={{flex:1, minWidth:90}}>
+                                <label>Start</label>
+                                <input type="time" value={historyEdit.start}
+                                  onChange={e => setHistoryEdit(h => ({ ...h, start: e.target.value }))} />
+                              </div>
+                              <div className="field" style={{flex:1, minWidth:90}}>
+                                <label>End</label>
+                                <input type="time" value={historyEdit.end}
+                                  onChange={e => setHistoryEdit(h => ({ ...h, end: e.target.value }))} />
+                              </div>
+                              <button className="btn-primary btn-sm" style={{marginBottom:2}} onClick={saveHistoryEdit}>Save</button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {markDoneModal && (
         <div className="modal-overlay" onClick={() => setMarkDoneModal(null)}>
           <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Mark as done</h2>
-              <button className="modal-close" onClick={() => setMarkDoneModal(null)}>×</button>
+              <button className="modal-close" onClick={() => setMarkDoneModal(null)}>\xd7</button>
             </div>
             <div className="modal-body">
               <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
