@@ -13,7 +13,8 @@
 
 import { Capacitor } from '@capacitor/core'
 
-const CLIENT_ID    = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const CLIENT_ID        = import.meta.env.VITE_GOOGLE_CLIENT_ID          // Web application client (GIS popup)
+const CLIENT_ID_NATIVE = import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE   // Desktop app client (PKCE / Android)
 const REDIRECT_URI = 'com.mar.addapp://oauth2callback'
 const TOKEN_URL    = 'https://oauth2.googleapis.com/token'
 
@@ -133,7 +134,8 @@ export function connectGoogle(onToken, onError) {
  *   3. AndroidManifest.xml intent filter for com.mar.addapp scheme (already done)
  */
 export async function connectGoogleNative(onToken, onError) {
-  if (!CLIENT_ID || CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE') {
+  const nativeId = CLIENT_ID_NATIVE || CLIENT_ID
+  if (!nativeId || nativeId === 'PASTE_YOUR_CLIENT_ID_HERE') {
     onError('Google Client ID not configured.')
     return
   }
@@ -147,7 +149,7 @@ export async function connectGoogleNative(onToken, onError) {
     sessionStorage.setItem('gcal_pkce_verifier', verifier)
 
     const params = new URLSearchParams({
-      client_id:             CLIENT_ID,
+      client_id:             nativeId,
       redirect_uri:          REDIRECT_URI,
       response_type:         'code',
       scope:                 SCOPES,
@@ -188,7 +190,7 @@ export async function connectGoogleNative(onToken, onError) {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
             code,
-            client_id:     CLIENT_ID,
+            client_id:     nativeId,
             redirect_uri:  REDIRECT_URI,
             grant_type:    'authorization_code',
             code_verifier: storedVerifier,
@@ -230,7 +232,7 @@ async function _refreshNativeToken(onToken, onFail) {
       method:  'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id:     CLIENT_ID,
+        client_id:     CLIENT_ID_NATIVE || CLIENT_ID,
         refresh_token: refreshToken,
         grant_type:    'refresh_token',
       }),
