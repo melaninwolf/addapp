@@ -12,6 +12,7 @@ import FocusSession  from './pages/FocusSession.jsx'
 import Journal       from './pages/Journal.jsx'
 import Hobbies       from './pages/Hobbies.jsx'
 import UsageTracker  from './pages/UsageTracker.jsx'
+import BrainDump    from './pages/BrainDump.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -286,6 +287,13 @@ function AppShell({ user }) {
             {showFull && <span>Hobbies</span>}
           </NavLink>
 
+          <NavLink to="/braindump"
+            className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+            title={!showFull ? 'Brain Dump' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">🧠</span>
+            {showFull && <span>Brain Dump</span>}
+          </NavLink>
+
           <NavLink to="/usage"
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
             title={!showFull ? 'Screen Time' : undefined} onClick={closeDrawer}>
@@ -375,6 +383,7 @@ function AppShell({ user }) {
           <Route path="/health"       element={<Health        userId={user?.id} />} />
           <Route path="/journal"      element={<Journal       userId={user?.id} />} />
           <Route path="/hobbies"     element={<Hobbies       userId={user?.id} />} />
+          <Route path="/braindump"    element={<BrainDump     userId={user?.id} />} />
           <Route path="/usage"        element={<UsageTracker  userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />

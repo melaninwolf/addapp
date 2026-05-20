@@ -1,0 +1,217 @@
+/* ── Brain Dump page ─────────────────────────────────────── */
+
+.bd-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--text3);
+  font-size: 14px;
+}
+
+.bd-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.bd-header {
+  margin-bottom: 2rem;
+}
+
+/* ── Section ──────────────────────────────────────────────── */
+
+.bd-section {
+  margin-bottom: 2.5rem;
+}
+
+.bd-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Save status ─────────────────────────────────────────── */
+
+.bd-save-status {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: color 0.2s;
+}
+
+.bd-save-status.saved   { color: var(--accent); }
+.bd-save-status.saving  { color: var(--text3); }
+.bd-save-status.unsaved { color: var(--text3); }
+
+/* ── Freeform textarea ───────────────────────────────────── */
+
+.bd-textarea {
+  width: 100%;
+  min-height: 260px;
+  padding: 1.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+  font-size: 16px;         /* 16px prevents auto-zoom on iOS/Android */
+  font-family: inherit;
+  line-height: 1.7;
+  resize: none;
+  overflow: hidden;        /* auto-expands via JS */
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bd-textarea::placeholder {
+  color: var(--text3);
+  line-height: 1.7;
+}
+
+.bd-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Quick-capture input ─────────────────────────────────── */
+
+.bd-input-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 1rem;
+}
+
+.bd-item-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 16px;         /* prevents auto-zoom */
+  font-family: inherit;
+  transition: border-color 0.15s;
+  min-width: 0;
+}
+
+.bd-item-input::placeholder { color: var(--text3); }
+.bd-item-input:focus { outline: none; border-color: var(--accent); }
+
+.bd-add-btn {
+  padding: 0.75rem 1.25rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+  /* large tap target for pen/stylus */
+  min-width: 60px;
+  min-height: 44px;
+}
+
+.bd-add-btn:disabled { opacity: 0.35; cursor: default; }
+.bd-add-btn:not(:disabled):hover { opacity: 0.85; }
+
+/* ── Items list ──────────────────────────────────────────── */
+
+.bd-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bd-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0.85rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.15s;
+}
+
+.bd-item:hover { border-color: var(--border-hover, #383838); }
+
+.bd-item-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.bd-item-text {
+  flex: 1;
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.bd-item-del {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px 8px;       /* generous tap target */
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bd-item-del:hover {
+  color: var(--danger, #e24b4a);
+  background: rgba(226, 75, 74, 0.08);
+}
+
+.bd-items-empty {
+  padding: 1.5rem 0;
+  text-align: center;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+/* ── Clear button ────────────────────────────────────────── */
+
+.bd-clear-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+
+.bd-clear-btn:hover { color: var(--danger, #e24b4a); }
+
+/* ── Mobile tweaks ───────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .bd-page { padding: 1.25rem 1rem 3rem; }
+  .bd-textarea { min-height: 200px; font-size: 16px; }
+  .bd-item-input { font-size: 16px; }
+}
