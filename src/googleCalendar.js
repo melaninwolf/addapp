@@ -162,14 +162,20 @@ export async function connectGoogleNative(onToken, onError) {
     })
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`
 
+    // Track whether the deep-link fired so browserFinished can distinguish
+    // "user completed auth" from "user closed tab / Google showed an error page"
+    let codeReceived = false
+
     // Register deep-link listener BEFORE opening browser
-    const listener = await App.addListener('appUrlOpen', async (event) => {
-      await listener.remove()
+    const urlListener = await App.addListener('appUrlOpen', async (event) => {
+      codeReceived = true
+      await urlListener.remove()
+      try { browserFinishedListener.remove() } catch (_) {}
       try { await Browser.close() } catch (_) {}
 
       const url = event.url || ''
       if (!url.startsWith(REDIRECT_URI)) {
-        onError('Unexpected redirect URL')
+        onError('Unexpected redirect URL: ' + url)
         return
       }
 
@@ -213,6 +219,16 @@ export async function connectGoogleNative(onToken, onError) {
         onToken(data.access_token)
       } catch (fetchErr) {
         onError(`Token exchange network error: ${fetchErr.message}`)
+      }
+    })
+
+    // If the browser closes without a redirect (user cancelled, or Google showed
+    // an error page like redirect_uri_mismatch), surface a clear error message.
+    const browserFinishedListener = await Browser.addListener('browserFinished', () => {
+      browserFinishedListener.remove()
+      if (!codeReceived) {
+        urlListener.remove()
+        onError('Google sign-in was cancelled or failed. If this keeps happening, the OAuth client may need to be reconfigured.')
       }
     })
 
