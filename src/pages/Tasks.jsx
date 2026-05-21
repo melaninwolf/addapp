@@ -490,8 +490,27 @@ export default function Tasks({ userId }) {
       cats = data || []
     }
 
+    // ── Auto-backlog: any task with a past due date that isn't done or already backlogged ──
+    let loaded = taskRes.data || []
+    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0)
+    const toBacklog = loaded.filter(t =>
+      t.due_date &&
+      t.status !== 'done' &&
+      t.status !== 'backlog' &&
+      new Date(t.due_date + 'T00:00:00') < todayMidnight
+    )
+    if (toBacklog.length > 0) {
+      const ids = toBacklog.map(t => t.id)
+      await supabase.from('tasks')
+        .update({ status: 'backlog', updated_at: new Date().toISOString() })
+        .in('id', ids)
+        .eq('user_id', userId)
+      const backlogSet = new Set(ids)
+      loaded = loaded.map(t => backlogSet.has(t.id) ? { ...t, status: 'backlog' } : t)
+    }
+
     setCategories(cats)
-    setTasks(taskRes.data || [])
+    setTasks(loaded)
     setActiveProjects(projRes.data || [])
     setLoading(false)
   }
