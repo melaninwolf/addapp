@@ -1115,16 +1115,18 @@ export default function Routines({ userId }) {
   }, [userId])
 
   // Load today's routine logs so cards can show completion status
-  useEffect(() => {
+  async function loadTodayLogs() {
     if (!userId) return
     const todayStr = new Date().toISOString().split('T')[0]
-    supabase.from('routine_logs')
+    const { data } = await supabase.from('routine_logs')
       .select('id, routine_id, status, started_at, ended_at')
       .eq('user_id', userId)
       .gte('started_at', todayStr + 'T00:00:00.000Z')
       .lte('started_at', todayStr + 'T23:59:59.999Z')
-      .then(({ data }) => setTodayLogs(data || []))
-  }, [userId])
+    setTodayLogs(data || [])
+  }
+
+  useEffect(() => { loadTodayLogs() }, [userId]) // eslint-disable-line
 
   async function saveRoutine(data) {
     if (modal?.id) {
@@ -1286,7 +1288,7 @@ export default function Routines({ userId }) {
     return <RoutineRunner
       routine={running}
       userId={userId}
-      onFinish={() => setRunning(null)}
+      onFinish={() => { setRunning(null); loadTodayLogs() }}
       onStartFocus={() => { setRunning(null); navigate('/focus') }}
     />
   }
@@ -1318,7 +1320,7 @@ export default function Routines({ userId }) {
           }
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-ghost btn-sm" onClick={() => setShowTemplates(true)}>\U0001f4cb Templates</button>
+          <button className="btn-ghost btn-sm" onClick={() => setShowTemplates(true)}>📋 Templates</button>
           <button className="btn-primary btn-sm" onClick={() => setModal('new')}>+ New routine</button>
         </div>
       </div>
@@ -1377,8 +1379,8 @@ export default function Routines({ userId }) {
               {todayLog && (
                 <button className="btn-ghost btn-sm" onClick={() => openEditLog(r)}>✏ Times</button>
               )}
-              <button className="btn-ghost btn-sm" onClick={() => openHistory(r)}>\U0001f4cb History</button>
-              <button className="rc-delete-btn" onClick={() => setDeleteConfirm(r)} title="Delete">\U0001f5d1</button>
+              <button className="btn-ghost btn-sm" onClick={() => openHistory(r)}>📋 History</button>
+              <button className="rc-delete-btn" onClick={() => setDeleteConfirm(r)} title="Delete">🗑</button>
             </div>
           </div>
         )}
@@ -1471,7 +1473,7 @@ export default function Routines({ userId }) {
           <div className="modal" style={{maxWidth:480, maxHeight:'80vh', display:'flex', flexDirection:'column'}} onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <h2>{historyModal.emoji} {historyModal.name} &mdash; history</h2>
-              <button className="modal-close" onClick={() => { setHistoryModal(null); setHistoryEdit(null) }}>\xd7</button>
+              <button className="modal-close" onClick={() => { setHistoryModal(null); setHistoryEdit(null) }}>×</button>
             </div>
             <div className="modal-body" style={{overflowY:'auto', flex:1}}>
               {historyLoading ? (
