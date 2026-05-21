@@ -575,6 +575,11 @@
   color: var(--text3);
   flex-shrink: 0;
 }
+.dl-recur {
+  font-size: 12px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
 .dl-pri {
   font-size: 12px;
   font-weight: 800;

@@ -509,8 +509,38 @@
   transition: all 0.12s;
 }
 .jtask-check.done { background: var(--green, #22c55e); border-color: var(--green, #22c55e); }
-.jtask-title { font-size: 13px; color: var(--text); }
+.jtask-title { font-size: 13px; color: var(--text); flex: 1; }
 .jtask-title.done { text-decoration: line-through; color: var(--text3); }
+.jtask-priority {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  flex-shrink: 0;
+  text-transform: capitalize;
+}
+.jtask-pri-high   { background: #ef444420; color: #ef4444; }
+.jtask-pri-low    { background: var(--bg3); color: var(--text3); }
+.jtask-list       { display: flex; flex-direction: column; }
+
+/* ── Persistent tasks section at bottom of entry ─────────────── */
+.entry-tasks-section {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.entry-tasks-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.jtask-done-count {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 500;
+}
 
 /* ── Journal inputs ───────────────────────────────────────────── */
 .journal-input {

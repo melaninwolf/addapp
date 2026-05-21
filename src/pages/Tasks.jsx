@@ -33,11 +33,32 @@ const RECURRENCES = [
 
 function nextDueDate(current, recurrence) {
   if (!current || recurrence === 'none') return null
-  const d = new Date(current + 'T00:00:00')
-  if (recurrence === 'daily')   d.setDate(d.getDate() + 1)
-  if (recurrence === 'weekly')  d.setDate(d.getDate() + 7)
-  if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1)
-  return d.toISOString().split('T')[0]
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+
+  if (recurrence === 'daily') {
+    // Always schedule for tomorrow from today, not from (possibly overdue) due date
+    const next = new Date(today)
+    next.setDate(next.getDate() + 1)
+    return next.toISOString().split('T')[0]
+  }
+
+  if (recurrence === 'weekly') {
+    // Keep the original weekday anchor, but skip forward until future
+    const next = new Date(current + 'T00:00:00')
+    next.setDate(next.getDate() + 7)
+    while (next <= today) next.setDate(next.getDate() + 7)
+    return next.toISOString().split('T')[0]
+  }
+
+  if (recurrence === 'monthly') {
+    // Keep the original day-of-month anchor, but skip to next future month
+    const next = new Date(current + 'T00:00:00')
+    next.setMonth(next.getMonth() + 1)
+    while (next <= today) next.setMonth(next.getMonth() + 1)
+    return next.toISOString().split('T')[0]
+  }
+
+  return null
 }
 
 function priColor(p) {
@@ -191,6 +212,16 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
                 </button>
               ))}
             </div>
+            {recurrence !== 'none' && !dueDate && (
+              <p style={{ fontSize: 12, color: '#f59e0b', marginTop: 6, marginBottom: 0 }}>
+                ⚠️ Set a due date so the next occurrence can be scheduled automatically.
+              </p>
+            )}
+            {recurrence !== 'none' && dueDate && (
+              <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6, marginBottom: 0 }}>
+                Next after completion: {formatDue(nextDueDate(dueDate, recurrence))}
+              </p>
+            )}
           </div>
 
           <textarea className="modal-input modal-textarea"
@@ -343,6 +374,9 @@ function DailyListView({ tasks, categories, onToggleDone, onEdit, onAdd }) {
         </button>
         <div className="dl-info" onClick={() => onEdit(task)}>
           <span className={`dl-title${done ? ' done' : ''}`}>{task.title}</span>
+          {task.recurrence && task.recurrence !== 'none' && (
+            <span className="dl-recur" title={`Repeats ${task.recurrence}`}>🔄</span>
+          )}
           {cat && <span className="dl-cat" style={{ color: cat.color, background: cat.color + '18' }}>{cat.name}</span>}
           {task.due_time && <span className="dl-time">⏰ {task.due_time.slice(0,5)}</span>}
         </div>
@@ -539,7 +573,9 @@ export default function Tasks({ userId }) {
     setDragId(null); setDragTarget(null)
   }
 
-  const filteredTasks = filter === 'all' ? tasks : tasks.filter(t => t.category_id === filter)
+  const filteredTasks = filter === 'all'       ? tasks
+                      : filter === 'recurring' ? tasks.filter(t => t.recurrence && t.recurrence !== 'none')
+                      : tasks.filter(t => t.category_id === filter)
   const totalDone     = tasks.filter(t => t.status === 'done').length
 
   function openAdd(status) { setEditingTask(null); setDefStatus(status); setShowForm(true) }
@@ -577,6 +613,18 @@ export default function Tasks({ userId }) {
           All
           <span className="cat-pill-count">{tasks.length}</span>
         </button>
+
+        {tasks.some(t => t.recurrence && t.recurrence !== 'none') && (
+          <button
+            className={`cat-pill${filter === 'recurring' ? ' active' : ''}`}
+            style={filter === 'recurring' ? { borderColor: '#818cf8', color: '#818cf8', background: '#818cf818' } : {}}
+            onClick={() => setFilter(f => f === 'recurring' ? 'all' : 'recurring')}>
+            🔄 Recurring
+            <span className="cat-pill-count">
+              {tasks.filter(t => t.recurrence && t.recurrence !== 'none').length}
+            </span>
+          </button>
+        )}
 
         {categories.map(c => (
           <div key={c.id} className="cat-pill-wrap">

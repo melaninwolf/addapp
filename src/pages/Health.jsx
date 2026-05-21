@@ -708,10 +708,12 @@ export default function Health({ userId }) {
   const [loading,      setLoading]      = useState(true)
 
   // Medications state
-  const [medications,  setMedications]  = useState([])
-  const [todayMedLogs, setTodayMedLogs] = useState({})
-  const [showMedForm,  setShowMedForm]  = useState(false)
-  const [editingMed,   setEditingMed]   = useState(null) // med object being edited
+  const [medications,    setMedications]    = useState([])
+  const [hiddenMeds,     setHiddenMeds]     = useState([])
+  const [showHiddenMeds, setShowHiddenMeds] = useState(false)
+  const [todayMedLogs,   setTodayMedLogs]   = useState({})
+  const [showMedForm,    setShowMedForm]    = useState(false)
+  const [editingMed,     setEditingMed]     = useState(null) // med object being edited
 
   // Health Connect state (Android only)
   const [hcAvailable, setHcAvailable]  = useState(false)
@@ -823,9 +825,23 @@ export default function Health({ userId }) {
     await loadMedications()
   }
 
-  async function deleteMedication(id) {
+  async function hideMedication(id) {
     await supabase.from('user_medications').update({ active: false }).eq('id', id)
     await loadMedications()
+    if (showHiddenMeds) await loadHiddenMedications()
+  }
+
+  async function loadHiddenMedications() {
+    if (!userId) return
+    const { data } = await supabase.from('user_medications')
+      .select('*').eq('user_id', userId).eq('active', false).order('created_at')
+    setHiddenMeds(data || [])
+  }
+
+  async function restoreMedication(id) {
+    await supabase.from('user_medications').update({ active: true }).eq('id', id)
+    await loadMedications()
+    await loadHiddenMedications()
   }
 
   if (loading) return (
@@ -975,8 +991,8 @@ export default function Health({ userId }) {
                     <div className="health-med-actions">
                       <button className="icon-btn" title="Edit"
                         onClick={() => { setEditingMed(med); setShowMedForm(false) }}>✏️</button>
-                      <button className="icon-btn" title="Remove"
-                        onClick={() => deleteMedication(med.id)}>🗑</button>
+                      <button className="icon-btn" title="Hide medication"
+                        onClick={() => hideMedication(med.id)}>🙈</button>
                     </div>
                   </div>
                 )
@@ -988,6 +1004,37 @@ export default function Health({ userId }) {
             <MedForm
               onSave={saveMedication}
               onCancel={() => setShowMedForm(false)} />
+          )}
+
+          {/* Show / hide hidden medications */}
+          <button
+            className="health-hidden-meds-toggle"
+            onClick={async () => {
+              const next = !showHiddenMeds
+              setShowHiddenMeds(next)
+              if (next) await loadHiddenMedications()
+            }}>
+            {showHiddenMeds ? '▲ Hide hidden' : `👁 Show hidden${hiddenMeds.length > 0 ? ` (${hiddenMeds.length})` : ''}`}
+          </button>
+
+          {showHiddenMeds && hiddenMeds.length === 0 && (
+            <p className="health-meds-empty">No hidden medications.</p>
+          )}
+
+          {showHiddenMeds && hiddenMeds.length > 0 && (
+            <div className="health-med-list health-hidden-list">
+              {hiddenMeds.map(med => (
+                <div key={med.id} className="health-med-row health-med-row-hidden">
+                  <div className="health-med-info">
+                    <span className="health-med-name" style={{ opacity: 0.5 }}>💊 {med.name}</span>
+                    {med.dosage && <div className="health-med-meta"><span className="health-med-chip">{med.dosage}</span></div>}
+                  </div>
+                  <button className="btn-ghost btn-sm" onClick={() => restoreMedication(med.id)}>
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

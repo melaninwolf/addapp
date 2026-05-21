@@ -545,9 +545,6 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
         <div className="entry-right-col">
           <div className="journal-tabs">
             <button className={`jtab${activeTab === 'priorities' ? ' active' : ''}`} onClick={() => setActiveTab('priorities')}>Priorities</button>
-            <button className={`jtab${activeTab === 'tasks' ? ' active' : ''}`} onClick={() => setActiveTab('tasks')}>
-              Tasks {tasks.length > 0 && <span className="jtab-badge">{tasks.length}</span>}
-            </button>
             <button className={`jtab${activeTab === 'reflections' ? ' active' : ''}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
           </div>
 
@@ -605,43 +602,6 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
             </div>
           )}
 
-          {activeTab === 'tasks' && (
-            <div className="journal-panel">
-              <div className="journal-col-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                Tasks due today
-                <button className="jtask-add-btn" onClick={() => setAddingTask(a => !a)}>+ Add</button>
-              </div>
-              {addingTask && (
-                <div className="jtask-add-row">
-                  <input
-                    className="jtask-add-input"
-                    placeholder="Task title…"
-                    autoFocus
-                    value={newTaskTitle}
-                    onChange={e => setNewTaskTitle(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter')  addTaskFromJournal(newTaskTitle)
-                      if (e.key === 'Escape') { setAddingTask(false); setNewTaskTitle('') }
-                    }}
-                  />
-                  <button className="jtask-add-confirm" onClick={() => addTaskFromJournal(newTaskTitle)}>✓</button>
-                  <button className="jtask-add-cancel" onClick={() => { setAddingTask(false); setNewTaskTitle('') }}>✕</button>
-                </div>
-              )}
-              {tasks.length === 0 && !addingTask
-                ? <p className="journal-empty">No tasks due today.</p>
-                : tasks.map(task => (
-                    <div key={task.id} className="jtask-row" onClick={() => toggleTask(task)}>
-                      <div className={`jtask-check${task.status === 'done' ? ' done' : ''}`}>
-                        {task.status === 'done' && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 3L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                      </div>
-                      <span className={`jtask-title${task.status === 'done' ? ' done' : ''}`}>{task.title}</span>
-                    </div>
-                  ))
-              }
-            </div>
-          )}
-
           {activeTab === 'reflections' && (
             <div className="journal-panel">
               {[
@@ -661,6 +621,61 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Tasks for today — always visible ── */}
+      <div className="entry-tasks-section">
+        <div className="entry-tasks-head">
+          <span className="journal-col-title">Tasks for today</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {tasks.length > 0 && (
+              <span className="jtask-done-count">
+                {tasks.filter(t => t.status === 'done').length}/{tasks.length} done
+              </span>
+            )}
+            <button className="jtask-add-btn" onClick={() => setAddingTask(a => !a)}>+ Add</button>
+          </div>
+        </div>
+
+        {addingTask && (
+          <div className="jtask-add-row">
+            <input
+              className="jtask-add-input"
+              placeholder="Task title…"
+              autoFocus
+              value={newTaskTitle}
+              onChange={e => setNewTaskTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter')  addTaskFromJournal(newTaskTitle)
+                if (e.key === 'Escape') { setAddingTask(false); setNewTaskTitle('') }
+              }}
+            />
+            <button className="jtask-add-confirm" onClick={() => addTaskFromJournal(newTaskTitle)}>✓</button>
+            <button className="jtask-add-cancel" onClick={() => { setAddingTask(false); setNewTaskTitle('') }}>✕</button>
+          </div>
+        )}
+
+        {tasks.length === 0 && !addingTask ? (
+          <p className="journal-empty" style={{ margin: '6px 0 0' }}>No tasks for today. Hit + Add to capture one.</p>
+        ) : (
+          <div className="jtask-list">
+            {tasks.map(task => (
+              <div key={task.id} className="jtask-row" onClick={() => toggleTask(task)}>
+                <div className={`jtask-check${task.status === 'done' ? ' done' : ''}`}>
+                  {task.status === 'done' && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4l2.5 3L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </div>
+                <span className={`jtask-title${task.status === 'done' ? ' done' : ''}`}>{task.title}</span>
+                {task.priority && task.priority !== 'medium' && (
+                  <span className={`jtask-priority jtask-pri-${task.priority}`}>{task.priority}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1563,8 +1578,11 @@ function usePinchZoom(ref) {
   const scale    = useRef(1)
 
   useEffect(() => {
-    const el = ref.current
-    if (!el) return
+    const container = ref.current
+    if (!container) return
+
+    // Apply zoom to the scrollable inner area, not the overflow:hidden wrapper
+    const getTarget = () => container.querySelector('.journal-main') || container
 
     function dist(t) {
       const dx = t[0].clientX - t[1].clientX
@@ -1581,22 +1599,32 @@ function usePinchZoom(ref) {
       e.preventDefault()
       const d = dist(e.touches)
       const delta = d / lastDist.current
-      scale.current = Math.min(Math.max(scale.current * delta, 0.7), 2.5)
-      el.style.fontSize = scale.current + 'rem'
+      // min 1 (no zoom-out past native), max 3
+      scale.current = Math.min(Math.max(scale.current * delta, 1), 3)
+      const target = getTarget()
+      target.style.zoom = scale.current
       lastDist.current = d
     }
 
     function onTouchEnd(e) {
-      if (e.touches.length < 2) lastDist.current = null
+      if (e.touches.length < 2) {
+        lastDist.current = null
+        // Snap back to 1 if barely zoomed
+        if (scale.current < 1.08) {
+          scale.current = 1
+          const target = getTarget()
+          target.style.zoom = ''
+        }
+      }
     }
 
-    el.addEventListener('touchstart', onTouchStart, { passive: false })
-    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
-    el.addEventListener('touchend',   onTouchEnd)
+    container.addEventListener('touchstart', onTouchStart, { passive: false })
+    container.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    container.addEventListener('touchend',   onTouchEnd)
     return () => {
-      el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove',  onTouchMove)
-      el.removeEventListener('touchend',   onTouchEnd)
+      container.removeEventListener('touchstart', onTouchStart)
+      container.removeEventListener('touchmove',  onTouchMove)
+      container.removeEventListener('touchend',   onTouchEnd)
     }
   }, [ref])
 }
