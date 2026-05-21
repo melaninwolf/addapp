@@ -684,7 +684,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
         notifications: [
           {
             title: `${routine.name} complete! 🎉`,
-            body: `You earned +${xp} XP. Tap to see your progress.`,
+            body: `You earned +${xp}g MAM. Tap to see your progress.`,
             id: Math.floor(Math.random() * 100000),
             channelId: 'addapp-routines',
             schedule: { at: new Date(Date.now() + 500) },
@@ -696,7 +696,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       const send = () => {
         try {
           new Notification(`${routine.name} complete! 🎉`, {
-            body: `You earned +${xp} XP. Tap to see your breakdown.`,
+            body: `You earned +${xp}g MAM. Tap to see your breakdown.`,
             requireInteraction: true,
             tag: 'addapp-routine-complete',
             renotify: true,
@@ -828,8 +828,8 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   }
 
   if (finished) {
-    const xpPerStep = routine.type === 'trigger' ? 3 : 5
-    const xp = doneCount * xpPerStep
+    const mamPerStep = routine.type === 'trigger' ? MAM_TRIGGER : MAM_ROUTINE
+    const mamEarned  = doneCount * mamPerStep
     const totalTarget = stepLog.reduce((a, s) => a + s.target, 0)
     const totalActual = stepLog.reduce((a, s) => a + s.actual, 0)
     const allPerfect = doneCount === routine.steps.length
@@ -837,7 +837,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       <div className="runner-complete">
         <div className="complete-emoji">{allPerfect ? '🎉' : '✅'}</div>
         <h2 className="complete-title">{allPerfect ? 'Perfect routine!' : 'Routine finished!'}</h2>
-        <div className="complete-xp">+{xp} XP</div>
+        <div className="complete-xp">+{mamEarned}g MAM</div>
         <div className="analysis-totals">
           <div className="analysis-total-item">
             <span className="at-label">Time planned</span>

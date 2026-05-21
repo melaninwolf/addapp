@@ -971,8 +971,6 @@ export default function Home({ userId }) {
       {/* ── Stats dashboard ── */}
       <StatsGrid userId={userId} />
 
-      <HabitTracker userId={userId} />
-
       <BadgesPanel userId={userId} xp={xp} />
 
     </div>
