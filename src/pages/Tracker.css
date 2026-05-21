@@ -1,0 +1,360 @@
+/* ── Tracker page ─────────────────────────────────────────────── */
+.tracker-page {
+  padding: 2rem;
+  max-width: 960px;
+}
+
+/* Header */
+.trk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.trk-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.trk-subtitle {
+  font-size: 13px;
+  color: var(--text3);
+  margin: 0;
+}
+.trk-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Year nav */
+.trk-year-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px 10px;
+}
+.trk-year-label {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 38px;
+  text-align: center;
+  color: var(--text);
+}
+.trk-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  font-family: inherit;
+}
+.trk-nav-btn:hover { color: var(--text); }
+
+/* Add button */
+.trk-add-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.12s;
+}
+.trk-add-btn:hover { opacity: 0.85; }
+
+/* ── Add / Edit form ────────────────────────────────────────── */
+.trk-form-wrap {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 24px;
+}
+.trk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.trk-form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+  outline: none;
+}
+.trk-form-input:focus { border-color: var(--accent); }
+
+.trk-color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.trk-color-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.trk-color-picker {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.trk-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s, border-color 0.1s;
+}
+.trk-color-swatch:hover { transform: scale(1.2); }
+.trk-color-swatch.active {
+  border-color: var(--text);
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px var(--bg2), 0 0 0 4px var(--text);
+}
+
+.trk-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.trk-btn-cancel {
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.trk-btn-cancel:hover { border-color: var(--text3); }
+.trk-btn-save {
+  padding: 7px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.trk-btn-save:disabled { opacity: 0.45; cursor: default; }
+
+/* ── Tracker card list ──────────────────────────────────────── */
+.trk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.trk-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px 18px;
+  overflow: hidden;
+}
+.trk-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.trk-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.trk-color-bar {
+  width: 4px;
+  height: 22px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.trk-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.trk-stats-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.trk-stat {
+  font-size: 12px;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+.trk-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.trk-action-btn {
+  font-size: 12px;
+  padding: 4px 11px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.12s, color 0.12s;
+}
+.trk-action-btn:hover { border-color: var(--accent); color: var(--text); }
+.trk-del-btn:hover    { border-color: #ef4444 !important; color: #ef4444 !important; }
+
+/* ── Year grid ──────────────────────────────────────────────── */
+.trk-grid-outer {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+/* Month labels row */
+.trk-month-row {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 4px;
+  padding-left: 18px; /* align with grid (dow col width) */
+  min-width: max-content;
+}
+.trk-month-cell {
+  width: 13px;
+  font-size: 10px;
+  color: var(--text3);
+  overflow: visible;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Grid body: dow labels + cells side by side */
+.trk-grid-body {
+  display: flex;
+  gap: 4px;
+  min-width: max-content;
+}
+.trk-dow-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 14px;
+  flex-shrink: 0;
+}
+.trk-dow-label {
+  height: 13px;
+  font-size: 9px;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 2px;
+}
+
+/* Weeks + cells */
+.trk-grid {
+  display: flex;
+  gap: 2px;
+  min-width: max-content;
+}
+.trk-week-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trk-cell {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.08s, opacity 0.08s;
+}
+.trk-cell:hover:not(:disabled) {
+  transform: scale(1.3);
+  z-index: 1;
+  position: relative;
+}
+.trk-cell.trk-cell-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+.trk-cell.trk-done {
+  border-color: transparent;
+}
+.trk-cell.trk-future {
+  opacity: 0.2;
+  cursor: default;
+}
+
+/* ── Empty state ─────────────────────────────────────────────── */
+.trk-empty {
+  text-align: center;
+  padding: 70px 20px;
+  color: var(--text2);
+}
+.trk-empty-icon { font-size: 44px; margin-bottom: 14px; }
+.trk-empty-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.trk-empty-sub {
+  font-size: 13px;
+  color: var(--text3);
+  margin-bottom: 20px;
+  max-width: 360px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.5;
+}
+.trk-loading {
+  text-align: center;
+  padding: 48px;
+  color: var(--text3);
+  font-size: 14px;
+}
+
+/* ── Mobile ──────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .tracker-page { padding: 1rem; }
+  .trk-header { flex-direction: column; }
+  .trk-header-right { width: 100%; justify-content: space-between; }
+  .trk-card { padding: 12px 12px 14px; }
+}

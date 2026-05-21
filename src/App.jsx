@@ -13,7 +13,7 @@ import Journal       from './pages/Journal.jsx'
 import Hobbies       from './pages/Hobbies.jsx'
 import UsageTracker  from './pages/UsageTracker.jsx'
 import BrainDump    from './pages/BrainDump.jsx'
-import Reviews      from './pages/Reviews.jsx'
+import Tracker      from './pages/Tracker.jsx'
 import Settings      from './pages/Settings.jsx'
 import Auth from './pages/Auth.jsx'
 import { initSettings, getSettings, saveSettings } from './settings'
@@ -302,11 +302,11 @@ function AppShell({ user }) {
             {showFull && <span>Screen Time</span>}
           </NavLink>
 
-          <NavLink to="/reviews"
+          <NavLink to="/tracker"
             className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
-            title={!showFull ? 'Reviews' : undefined} onClick={closeDrawer}>
-            <span className="nav-icon">📊</span>
-            {showFull && <span>Reviews</span>}
+            title={!showFull ? 'Tracker' : undefined} onClick={closeDrawer}>
+            <span className="nav-icon">📋</span>
+            {showFull && <span>Tracker</span>}
           </NavLink>
         </div>
 
@@ -398,7 +398,7 @@ function AppShell({ user }) {
           <Route path="/hobbies"     element={<Hobbies       userId={user?.id} />} />
           <Route path="/braindump"    element={<BrainDump     userId={user?.id} />} />
           <Route path="/usage"        element={<UsageTracker  userId={user?.id} />} />
-          <Route path="/reviews"      element={<Reviews       userId={user?.id} />} />
+          <Route path="/tracker"      element={<Tracker       userId={user?.id} />} />
           <Route path="/settings" element={
             <Settings settings={settings} onUpdate={updateSettings} onBack={() => navigate('/')} />
           } />
