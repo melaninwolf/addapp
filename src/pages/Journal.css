@@ -1401,3 +1401,97 @@
 }
 .jtask-add-confirm { background: var(--accent); color: #fff; }
 .jtask-add-cancel  { background: var(--bg3); color: var(--text3); }
+
+/* ── Pen canvas ghost (keyboard mode) ────────────────────────── */
+.pen-field-over {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ph, 80px);
+}
+.pen-bg-slot {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  opacity: 0.18;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.pen-bg-slot .draw-canvas-wrap { margin: 0; }
+.pen-text-float {
+  position: relative;
+  z-index: 2;
+  background: transparent !important;
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  min-height: var(--ph, 80px);
+}
+
+/* ── Pen toolbar ──────────────────────────────────────────────── */
+.pen-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.pen-tb-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pen-tb-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border2);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+.pen-tb-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+  font-family: inherit;
+}
+.pen-tb-btn:hover { background: var(--bg2); }
+.pen-tb-btn.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+}
+.pen-color-group { gap: 5px; }
+.pen-color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.1s, border-color 0.1s;
+  flex-shrink: 0;
+}
+.pen-color-swatch:hover { transform: scale(1.15); }
+.pen-color-swatch.active {
+  border-color: var(--accent);
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.pen-size-btn { gap: 0; }
+.pen-size-dot {
+  border-radius: 50%;
+  background: var(--text);
+  display: block;
+  flex-shrink: 0;
+}

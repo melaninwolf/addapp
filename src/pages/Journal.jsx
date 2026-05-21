@@ -65,7 +65,9 @@ function firstDayOfMonth(y, m) {
 }
 
 // ── DrawCanvas ────────────────────────────────────────────────
-function DrawCanvas({ data, onChange, height = 80 }) {
+const PEN_SIZES = { thin: 1.2, medium: 2.5, thick: 5 }
+
+function DrawCanvas({ data, onChange, height = 80, interactive = true, penColor = 'auto', penSize = 'medium', penTool = 'pen' }) {
   const canvasRef = useRef(null)
   const ctxRef    = useRef(null)
   const drawing   = useRef(false)
@@ -83,6 +85,12 @@ function DrawCanvas({ data, onChange, height = 80 }) {
     }
   }, [data]) // eslint-disable-line
 
+  function resolveColor() {
+    if (!penColor || penColor === 'auto')
+      return getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#1a1a1a'
+    return penColor
+  }
+
   function getPos(e) {
     const r  = canvasRef.current.getBoundingClientRect()
     const sx = canvasRef.current.width  / r.width
@@ -90,24 +98,50 @@ function DrawCanvas({ data, onChange, height = 80 }) {
     return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy }
   }
 
+  function beginStroke(ctx, e) {
+    const base = PEN_SIZES[penSize] || 2.5
+    ctx.lineCap  = 'round'
+    ctx.lineJoin = 'round'
+    if (penTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out'
+      ctx.globalAlpha = 1
+      ctx.lineWidth   = base * 6
+      ctx.strokeStyle = 'rgba(0,0,0,1)'
+    } else if (penTool === 'highlighter') {
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.globalAlpha = 0.35
+      ctx.lineWidth   = base * 5
+      ctx.strokeStyle = resolveColor()
+      ctx.lineCap     = 'square'
+    } else {
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.globalAlpha = 1
+      ctx.lineWidth   = e.pointerType === 'pen' ? Math.max(0.8, (e.pressure || 0.5) * base * 1.6) : base
+      ctx.strokeStyle = resolveColor()
+    }
+  }
+
   function onPointerDown(e) {
+    if (!interactive) return
     e.preventDefault()
     canvasRef.current.setPointerCapture(e.pointerId)
     drawing.current = true
     lastPt.current  = getPos(e)
     const ctx = ctxRef.current
-    ctx.beginPath(); ctx.moveTo(lastPt.current.x, lastPt.current.y)
-    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#1a1a1a'
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-    ctx.lineWidth = e.pointerType === 'pen' ? Math.max(0.8, (e.pressure || 0.5) * 2.5) : 1.8
+    beginStroke(ctx, e)
+    ctx.beginPath()
+    ctx.moveTo(lastPt.current.x, lastPt.current.y)
   }
 
   function onPointerMove(e) {
-    if (!drawing.current) return
+    if (!drawing.current || !interactive) return
     e.preventDefault()
     const pos = getPos(e)
     const ctx = ctxRef.current
-    ctx.lineWidth = e.pointerType === 'pen' ? Math.max(0.8, (e.pressure || 0.5) * 2.5) : 1.8
+    if (penTool === 'pen' && e.pointerType === 'pen') {
+      const base = PEN_SIZES[penSize] || 2.5
+      ctx.lineWidth = Math.max(0.8, (e.pressure || 0.5) * base * 1.6)
+    }
     const mx = (pos.x + lastPt.current.x) / 2
     const my = (pos.y + lastPt.current.y) / 2
     ctx.quadraticCurveTo(lastPt.current.x, lastPt.current.y, mx, my)
@@ -118,20 +152,85 @@ function DrawCanvas({ data, onChange, height = 80 }) {
   function onPointerUp() {
     if (!drawing.current) return
     drawing.current = false
-    ctxRef.current.stroke()
+    const ctx = ctxRef.current
+    ctx.stroke()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = 1
     onChange(canvasRef.current.toDataURL())
   }
+
+  const cursor = !interactive ? 'default' : penTool === 'eraser' ? 'cell' : 'crosshair'
 
   return (
     <div className="draw-canvas-wrap">
       <canvas ref={canvasRef} width={600} height={Math.round(height * 1.5)}
-        className="draw-canvas" style={{ height, width: '100%', touchAction: 'none' }}
+        className="draw-canvas"
+        style={{ height, width: '100%', touchAction: interactive ? 'none' : 'auto', cursor }}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={onPointerUp} onPointerLeave={onPointerUp} />
-      <button className="draw-clear-btn" onClick={() => {
-        ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-        onChange(null)
-      }}>Clear</button>
+    </div>
+  )
+}
+
+// ── PenToolbar ────────────────────────────────────────────────
+const PEN_COLORS = [
+  { hex: 'auto',    label: 'Theme',  display: 'linear-gradient(135deg, #111 50%, #fff 50%)' },
+  { hex: '#ef4444', label: 'Red'    },
+  { hex: '#f97316', label: 'Orange' },
+  { hex: '#eab308', label: 'Yellow' },
+  { hex: '#22c55e', label: 'Green'  },
+  { hex: '#3b82f6', label: 'Blue'   },
+  { hex: '#a855f7', label: 'Purple' },
+  { hex: '#ec4899', label: 'Pink'   },
+  { hex: '#6b7280', label: 'Gray'   },
+  { hex: '#92400e', label: 'Brown'  },
+]
+const PEN_TOOLS_LIST = [
+  { id: 'pen',         label: 'Pen',         icon: '✏️' },
+  { id: 'highlighter', label: 'Highlighter', icon: '🖊️' },
+  { id: 'eraser',      label: 'Eraser',      icon: '⬜' },
+]
+const PEN_SIZES_LIST = [
+  { id: 'thin',   dot: 4  },
+  { id: 'medium', dot: 7  },
+  { id: 'thick',  dot: 11 },
+]
+
+function PenToolbar({ settings, onChange }) {
+  return (
+    <div className="pen-toolbar">
+      <div className="pen-tb-group">
+        {PEN_TOOLS_LIST.map(t => (
+          <button key={t.id}
+            className={`pen-tb-btn${settings.tool === t.id ? ' active' : ''}`}
+            onClick={() => onChange({ ...settings, tool: t.id })}
+            title={t.label}
+          >{t.icon}</button>
+        ))}
+      </div>
+      <div className="pen-tb-sep" />
+      <div className="pen-tb-group pen-color-group">
+        {PEN_COLORS.map(c => (
+          <button key={c.hex}
+            className={`pen-color-swatch${settings.color === c.hex ? ' active' : ''}`}
+            style={{ background: c.display || c.hex }}
+            onClick={() => onChange({ ...settings, color: c.hex, tool: settings.tool === 'eraser' ? 'pen' : settings.tool })}
+            title={c.label}
+          />
+        ))}
+      </div>
+      <div className="pen-tb-sep" />
+      <div className="pen-tb-group">
+        {PEN_SIZES_LIST.map(s => (
+          <button key={s.id}
+            className={`pen-tb-btn pen-size-btn${settings.size === s.id ? ' active' : ''}`}
+            onClick={() => onChange({ ...settings, size: s.id })}
+            title={s.id}
+          >
+            <span className="pen-size-dot" style={{ width: s.dot, height: s.dot }} />
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -180,10 +279,12 @@ function BulletList({ items, onChange, placeholder = 'Add item…', numbered = f
 
 // ── PenField ──────────────────────────────────────────────────
 // penMode prop: external control (from global toggle). If undefined, uses internal toggle.
-function PenField({ value, onChange, penData, onPenChange, placeholder, rows = 2, canvasHeight = 80, penMode: externalPen }) {
+// penSettings: { tool, color, size } — passed from DailyEntry toolbar.
+function PenField({ value, onChange, penData, onPenChange, placeholder, rows = 2, canvasHeight = 80, penMode: externalPen, penSettings }) {
   const [localPen, setLocalPen] = useState(false)
   const isGlobal = externalPen !== undefined
   const active   = isGlobal ? externalPen : localPen
+  const ps = penSettings || {}
   return (
     <div className="pen-field">
       {!isGlobal && (
@@ -192,20 +293,30 @@ function PenField({ value, onChange, penData, onPenChange, placeholder, rows = 2
           {active ? '⌨️' : '✏️'}
         </button>
       )}
-      {active
-        ? <DrawCanvas data={penData} onChange={onPenChange} height={canvasHeight} />
-        : <textarea className="journal-input" rows={rows} placeholder={placeholder}
+      {active ? (
+        <DrawCanvas data={penData} onChange={onPenChange} height={canvasHeight}
+          interactive={true} penColor={ps.color} penSize={ps.size} penTool={ps.tool} />
+      ) : (
+        <div className="pen-field-over" style={{ '--ph': canvasHeight + 'px' }}>
+          {penData && (
+            <div className="pen-bg-slot">
+              <DrawCanvas data={penData} onChange={() => {}} height={canvasHeight} interactive={false} />
+            </div>
+          )}
+          <textarea className="journal-input pen-text-float" rows={rows} placeholder={placeholder}
             value={value || ''} onChange={e => onChange(e.target.value)} />
-      }
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Schedule slot ─────────────────────────────────────────────
-function ScheduleSlot({ hour, value, penData, onTextChange, onPenChange, penMode: externalPen }) {
+function ScheduleSlot({ hour, value, penData, onTextChange, onPenChange, penMode: externalPen, penSettings }) {
   const [localPen, setLocalPen] = useState(false)
   const isGlobal = externalPen !== undefined
   const active   = isGlobal ? externalPen : localPen
+  const ps = penSettings || {}
   return (
     <div className="sched-slot">
       <div className="sched-hour">{hour.label}</div>
@@ -216,11 +327,20 @@ function ScheduleSlot({ hour, value, penData, onTextChange, onPenChange, penMode
             {active ? '⌨️' : '✏️'}
           </button>
         )}
-        {active
-          ? <DrawCanvas data={penData} onChange={onPenChange} height={36} />
-          : <input className="journal-input sched-input" type="text" placeholder="—"
+        {active ? (
+          <DrawCanvas data={penData} onChange={onPenChange} height={36}
+            interactive={true} penColor={ps.color} penSize={ps.size} penTool={ps.tool} />
+        ) : (
+          <div className="pen-field-over" style={{ '--ph': '36px' }}>
+            {penData && (
+              <div className="pen-bg-slot">
+                <DrawCanvas data={penData} onChange={() => {}} height={36} interactive={false} />
+              </div>
+            )}
+            <input className="journal-input sched-input" type="text" placeholder="—"
               value={value || ''} onChange={e => onTextChange(e.target.value)} />
-        }
+          </div>
+        )}
       </div>
     </div>
   )
@@ -357,6 +477,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
   const [activeTab,  setActiveTab]  = useState('priorities')
 
   const [globalPen,   setGlobalPen]   = useState(false)
+  const [penSettings, setPenSettings] = useState({ tool: 'pen', color: 'auto', size: 'medium' })
   const [schedule,    setSchedule]    = useState({})
   const [schedulePen, setSchedulePen] = useState({})
   const [priorities,  setPriorities]  = useState(['', '', '', ''])
@@ -522,6 +643,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
           </button>
         </div>
       </div>
+      {globalPen && <PenToolbar settings={penSettings} onChange={setPenSettings} />}
 
       {/* Two-column layout */}
       <div className="entry-layout">
@@ -537,6 +659,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                 onTextChange={v => setSchedule(s => ({ ...s, [hour.key]: v }))}
                 onPenChange={v => setSchedulePen(s => ({ ...s, [hour.key]: v }))}
                 penMode={globalPen}
+                penSettings={penSettings}
               />
             ))}
           </div>
@@ -572,7 +695,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                     onChange={v => setPriorities(prev => { const n = [...prev]; n[i] = v; return n })}
                     penData={priPen[i]}
                     onPenChange={v => setPriPen(prev => { const n = [...prev]; n[i] = v; return n })}
-                    placeholder={`Priority ${i + 1}…`} rows={1} canvasHeight={44} penMode={globalPen} />
+                    placeholder={`Priority ${i + 1}…`} rows={1} canvasHeight={44} penMode={globalPen} penSettings={penSettings} />
                   {priorities.length > 1 && (
                     <button className="bullet-remove" onClick={() => {
                       setPriorities(prev => prev.filter((_,idx) => idx !== i))
@@ -598,7 +721,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                 <div className="journal-col-title">Notes</div>
                 <PenField value={notes} onChange={setNotes}
                   penData={refPen.notes} onPenChange={v => setRefPen(p => ({ ...p, notes: v }))}
-                  placeholder="Anything on your mind today…" rows={4} canvasHeight={100} penMode={globalPen} />
+                  placeholder="Anything on your mind today…" rows={4} canvasHeight={100} penMode={globalPen} penSettings={penSettings} />
               </div>
             </div>
           )}
@@ -616,7 +739,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
                   <div className="journal-col-title" style={{ fontSize: 11, marginBottom: 6 }}>{f.label}</div>
                   <PenField value={f.val} onChange={f.set}
                     penData={refPen[f.key]} onPenChange={v => setRefPen(p => ({ ...p, [f.key]: v }))}
-                    placeholder="Write here…" rows={2} canvasHeight={60} penMode={globalPen} />
+                    placeholder="Write here…" rows={2} canvasHeight={60} penMode={globalPen} penSettings={penSettings} />
                 </div>
               ))}
             </div>

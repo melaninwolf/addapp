@@ -87,16 +87,18 @@ function isPastDue(d) {
 // ─── Task Form Modal ─────────────────────────────────────────
 function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, activeProjects, defaultStatus }) {
   const isEdit = !!task
-  const [title,      setTitle]      = useState('')
-  const [status,     setStatus]     = useState('todo')
-  const [priority,   setPriority]   = useState('medium')
-  const [categoryId, setCategoryId] = useState('')
-  const [projectId,  setProjectId]  = useState('')
-  const [dueDate,    setDueDate]    = useState('')
-  const [dueTime,    setDueTime]    = useState('')
-  const [notes,      setNotes]      = useState('')
-  const [recurrence, setRecurrence] = useState('none')
-  const [saving,     setSaving]     = useState(false)
+  const [title,       setTitle]       = useState('')
+  const [status,      setStatus]      = useState('todo')
+  const [priority,    setPriority]    = useState('medium')
+  const [categoryId,  setCategoryId]  = useState('')
+  const [projectId,   setProjectId]   = useState('')
+  const [milestoneId, setMilestoneId] = useState('')
+  const [milestones,  setMilestones]  = useState([])
+  const [dueDate,     setDueDate]     = useState('')
+  const [dueTime,     setDueTime]     = useState('')
+  const [notes,       setNotes]       = useState('')
+  const [recurrence,  setRecurrence]  = useState('none')
+  const [saving,      setSaving]      = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -106,15 +108,25 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
       setPriority(task.priority || 'medium')
       setCategoryId(task.category_id || '')
       setProjectId(task.project_id || '')
+      setMilestoneId(task.milestone_id || '')
       setDueDate(task.due_date || '')
       setDueTime(task.due_time || '')
       setNotes(task.notes || '')
       setRecurrence(task.recurrence || 'none')
     } else {
       setTitle(''); setStatus(defaultStatus || 'todo'); setPriority('medium')
-      setCategoryId(categories[0]?.id || ''); setProjectId(''); setDueDate(''); setDueTime(''); setNotes(''); setRecurrence('none')
+      setCategoryId(categories[0]?.id || ''); setProjectId(''); setMilestoneId('')
+      setDueDate(''); setDueTime(''); setNotes(''); setRecurrence('none')
     }
   }, [open, task]) // eslint-disable-line
+
+  // Load milestones whenever the selected project changes
+  useEffect(() => {
+    if (!projectId) { setMilestones([]); setMilestoneId(''); return }
+    supabase.from('milestones').select('id, name, done')
+      .eq('project_id', projectId).order('order_index')
+      .then(({ data }) => setMilestones((data || []).filter(m => !m.done)))
+  }, [projectId])
 
   if (!open) return null
 
@@ -122,7 +134,14 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
     if (!title.trim() || saving) return
     setSaving(true)
     try {
-      await onSave({ title: title.trim(), status, priority, category_id: categoryId || null, project_id: projectId || null, due_date: dueDate || null, due_time: dueTime || null, notes: notes.trim() || null, recurrence })
+      await onSave({
+        title: title.trim(), status, priority,
+        category_id:  categoryId  || null,
+        project_id:   projectId   || null,
+        milestone_id: milestoneId || null,
+        due_date: dueDate || null, due_time: dueTime || null,
+        notes: notes.trim() || null, recurrence,
+      })
       onClose()
     } finally { setSaving(false) }
   }
@@ -174,15 +193,29 @@ function TaskFormModal({ open, onClose, onSave, onDelete, task, categories, acti
           </div>
 
           {activeProjects?.length > 0 && (
-            <div className="modal-field">
-              <label className="modal-label">Project</label>
-              <select className="modal-input modal-select" value={projectId}
-                onChange={e => setProjectId(e.target.value)}>
-                <option value="">No project</option>
-                {activeProjects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+            <div className="modal-row" style={{ gap: 8 }}>
+              <div className="modal-field" style={{ flex: 1 }}>
+                <label className="modal-label">Project</label>
+                <select className="modal-input modal-select" value={projectId}
+                  onChange={e => { setProjectId(e.target.value); setMilestoneId('') }}>
+                  <option value="">No project</option>
+                  {activeProjects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              {milestones.length > 0 && (
+                <div className="modal-field" style={{ flex: 1 }}>
+                  <label className="modal-label">Milestone</label>
+                  <select className="modal-input modal-select" value={milestoneId}
+                    onChange={e => setMilestoneId(e.target.value)}>
+                    <option value="">No milestone</option>
+                    {milestones.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
@@ -273,12 +306,15 @@ function TaskCard({ task, categories, onEdit, onToggleDone, onDragStart, onDragE
       {task.recurrence && task.recurrence !== 'none' && (
         <span className="tc-chip tc-recur" title={task.recurrence}>🔄 {task.recurrence}</span>
       )}
-      {(task.due_date || cat) && (
+      {(task.due_date || cat || task.milestone?.name) && (
         <div className="tc-meta">
           {task.due_date && (
             <span className={`tc-due${late ? ' tc-late' : ''}`}>
               📅 {formatDue(task.due_date)}
             </span>
+          )}
+          {task.milestone?.name && (
+            <span className="tc-milestone-badge">🏁 {task.milestone.name}</span>
           )}
           {cat && (
             <span className="tc-cat-badge"
@@ -377,6 +413,7 @@ function DailyListView({ tasks, categories, onToggleDone, onEdit, onAdd }) {
           {task.recurrence && task.recurrence !== 'none' && (
             <span className="dl-recur" title={`Repeats ${task.recurrence}`}>🔄</span>
           )}
+          {task.milestone?.name && <span className="dl-milestone">🏁 {task.milestone.name}</span>}
           {cat && <span className="dl-cat" style={{ color: cat.color, background: cat.color + '18' }}>{cat.name}</span>}
           {task.due_time && <span className="dl-time">⏰ {task.due_time.slice(0,5)}</span>}
         </div>
@@ -441,7 +478,7 @@ export default function Tasks({ userId }) {
     setLoading(true)
     const [catRes, taskRes, projRes] = await Promise.all([
       supabase.from('task_categories').select('*').eq('user_id', userId).order('sort_order'),
-      supabase.from('tasks').select('*').eq('user_id', userId).order('sort_order'),
+      supabase.from('tasks').select('*, milestone:milestones(id, name)').eq('user_id', userId).order('sort_order'),
       supabase.from('projects').select('id, name, color').eq('user_id', userId)
         .in('status', ['not_started', 'active', 'hold']),
     ])

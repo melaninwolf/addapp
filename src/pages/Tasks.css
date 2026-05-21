@@ -363,6 +363,16 @@
   border-radius: 10px;
   white-space: nowrap;
 }
+.tc-milestone-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  color: #818cf8;
+  background: #818cf818;
+  border: 1px solid #818cf840;
+}
 
 .tc-notes {
   margin-top: 6px;
@@ -579,6 +589,12 @@
   font-size: 12px;
   flex-shrink: 0;
   opacity: 0.7;
+}
+.dl-milestone {
+  font-size: 11px;
+  font-weight: 500;
+  color: #818cf8;
+  flex-shrink: 0;
 }
 .dl-pri {
   font-size: 12px;
