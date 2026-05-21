@@ -138,6 +138,10 @@ function formatTimer(secs) {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+// Seconds after a step's time expires at which to fire escalating alerts.
+// The last entry (3600 = 60 min) also triggers auto-pause.
+const ESCALATION_OFFSETS = [0, 120, 300, 600, 900, 1800, 2700, 3600]
+
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function RoutineModal({ routine, onSave, onClose }) {
   const [name, setName] = useState(routine?.name || '')
@@ -353,9 +357,10 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   const [autoPaused, setAutoPaused] = useState(false)
   const autoPausedRef               = useRef(false)
 
-  const timerRef    = useRef(null)
-  const hiddenAtRef = useRef(null)
-  const pausedRef   = useRef(false)
+  const timerRef       = useRef(null)
+  const hiddenAtRef    = useRef(null)
+  const pausedRef      = useRef(false)
+  const firedAlertsRef = useRef(new Set()) // tracks which ESCALATION_OFFSETS have fired for the current step
 
   const step = queue[stepIdx]
   const isDeferred = step?.deferred || false
@@ -364,7 +369,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   const pct = totalSecs > 0 ? Math.min(100, Math.round((elapsed / totalSecs) * 100)) : 0
   const upcoming = queue.slice(stepIdx + 1)
 
-  useEffect(() => { setElapsed(0); setPaused(false) }, [stepIdx])
+  useEffect(() => { setElapsed(0); setPaused(false); firedAlertsRef.current = new Set() }, [stepIdx])
 
   // Keep pausedRef in sync so the visibility handler always sees current value
   useEffect(() => { pausedRef.current = paused }, [paused])
@@ -497,26 +502,23 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
     }
   }, [stepIdx]) // eslint-disable-line
 
+  // Escalating overdue alerts: fire at 0, 2, 5, 10, 15, 30, 45, 60 min over.
+  // If multiple thresholds are crossed in one tick (e.g. coming back from background),
+  // only the highest reached fires to avoid notification spam.
   useEffect(() => {
-    if (elapsed === totalSecs && step && totalSecs > 0) {
-      showToast(`Time's up for "${step.name}" — mark done, skip, or do later!`)
-      playSound('step')
-      const nextStep = queue[stepIdx + 1]
-      if (nextStep) {
-        fireStepNotif(step.name, nextStep.name)
-      } else {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-            new Notification(`${step.name} is done`, {
-              body: 'Last step — mark done to finish your routine!',
-              tag: 'addapp-step',
-              renotify: true,
-            })
-          } catch(e) {}
-        }
+    if (!step || totalSecs === 0 || initState !== 'running') return
+    const over = elapsed - totalSecs
+    if (over < 0) return
+
+    let latestOffset = null
+    for (const offset of ESCALATION_OFFSETS) {
+      if (over >= offset && !firedAlertsRef.current.has(offset)) {
+        firedAlertsRef.current.add(offset)
+        latestOffset = offset
       }
     }
-  }, [elapsed])
+    if (latestOffset !== null) fireOverdueAlert(latestOffset)
+  }, [elapsed]) // eslint-disable-line
 
   function showToast(msg) {
     setToast(msg)
@@ -550,6 +552,46 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   }
 
   function resetTimer() { setElapsed(0) }
+
+  async function fireOverdueAlert(offset) {
+    const mins = Math.round(offset / 60)
+    const stepName = step?.name || 'current step'
+    const title = `⏰ ${stepName}`
+    const bodies = {
+      0:    "Time's up! Mark done, skip, or do later.",
+      120:  '2 min over — still working on this?',
+      300:  '5 min over — time to wrap up?',
+      600:  '10 min over on this step.',
+      900:  '15 min over — auto-pause coming in 45 min.',
+      1800: '30 min over on this step.',
+      2700: '45 min over — last reminder before auto-pause.',
+      3600: '60 min over — routine paused automatically.',
+    }
+    const body = bodies[offset] || `${mins} min over.`
+
+    // In-app toast
+    const toastMsg = offset === 0
+      ? `⏰ Time's up for "${stepName}" — mark done, skip, or do later!`
+      : `⏰ ${mins} min over on "${stepName}"`
+    showToast(toastMsg)
+    if (offset === 0) playSound('step')
+
+    // System notification (Capacitor on APK, Web Notification API as fallback)
+    try {
+      await LocalNotifications.schedule({
+        notifications: [{
+          title,
+          body,
+          id: Math.floor(Math.random() * 100000),
+          channelId: 'addapp-routines',
+          schedule: { at: new Date(Date.now() + 200) },
+        }]
+      })
+    } catch (e) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return
+      try { new Notification(title, { body, tag: 'addapp-overdue', renotify: true }) } catch(e2) {}
+    }
+  }
 
   async function fireStepNotif(currentName, nextName) {
     try {
@@ -809,52 +851,6 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
         {queue.map((_, i) => (
           <div key={i} className={`runner-dot${i < stepIdx ? ' done' : i === stepIdx ? ' current' : ''}`} />
         ))}
-      </div>
-
-      {/* TEMP: test notification button — remove before shipping */}
-      <div style={{textAlign:'center', marginBottom:'0.75rem'}}>
-        <button
-          className="btn-ghost-sm"
-          onClick={async () => {
-            playSound('step')
-            const nextStep = queue[stepIdx + 1]
-            try {
-              await LocalNotifications.schedule({
-                notifications: [
-                  {
-                    title: 'Test: Step done',
-                    body: nextStep ? `Next: ${nextStep.name}` : 'Last step!',
-                    id: Math.floor(Math.random() * 100000),
-                    channelId: 'addapp-routines',
-                    schedule: { at: new Date(Date.now() + 500) },
-                  }
-                ]
-              })
-              showToast('Test notification sent!')
-            } catch (e) {
-              if ('Notification' in window) {
-                if (Notification.permission === 'granted') {
-                  try {
-                    new Notification('Test: Step done', {
-                      body: nextStep ? `Next: ${nextStep.name}` : 'Last step!',
-                      tag: 'addapp-test',
-                      renotify: true,
-                    })
-                    showToast('Test notification sent!')
-                  } catch(e) { showToast('Notification failed: ' + e.message) }
-                } else if (Notification.permission === 'default') {
-                  Notification.requestPermission().then(p => {
-                    showToast(p === 'granted' ? 'Permission granted! Try again.' : 'Notifications blocked.')
-                  })
-                } else {
-                  showToast('Notifications are blocked. Enable in browser settings.')
-                }
-              } else {
-                showToast('Notifications not supported in this browser.')
-              }
-            }
-          }}
-        >🔔 Test notification</button>
       </div>
 
       <div className={`step-card ${isDeferred ? 'deferred' : ''} ${isOverTime ? 'overtime' : ''}`}>
