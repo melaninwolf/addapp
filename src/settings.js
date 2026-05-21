@@ -30,6 +30,7 @@ const DEFAULTS = {
   font:           'lexend',
   healthEnabled:  true,
   healthMetrics:  ['energy', 'sleep', 'stress', 'workout', 'steps', 'meditation', 'weight', 'bpm', 'bp', 'glucose', 'period', 'medication'],
+  tempUnit:       'celsius',
 }
 
 const KEY = 'addapp-settings'

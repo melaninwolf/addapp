@@ -25,7 +25,7 @@ const ALL_HEALTH_METRICS = [
 ]
 
 export default function Settings({ settings, onUpdate, onBack }) {
-  const { mode, color, font, healthEnabled = true, healthMetrics = ['energy','sleep','stress'] } = settings
+  const { mode, color, font, healthEnabled = true, healthMetrics = ['energy','sleep','stress'], tempUnit = 'celsius' } = settings
   const [profile, setProfile] = useState(() => getMotivationProfile())
 
   function pickProfile(id) {
@@ -186,6 +186,30 @@ export default function Settings({ settings, onUpdate, onBack }) {
           </>
         )}
         </section>
+
+      {/* -- Weather -- */}
+      <section className="settings-section">
+        <h2 className="section-title">Weather</h2>
+        <div className="setting-row" style={{ alignItems: 'center' }}>
+          <label className="setting-label">Temperature unit</label>
+          <div className="temp-unit-toggle">
+            <button
+              className={`temp-unit-btn${tempUnit === 'celsius' ? ' active' : ''}`}
+              onClick={() => onUpdate({ tempUnit: 'celsius' })}
+              aria-pressed={tempUnit === 'celsius'}
+            >
+              °C Celsius
+            </button>
+            <button
+              className={`temp-unit-btn${tempUnit === 'fahrenheit' ? ' active' : ''}`}
+              onClick={() => onUpdate({ tempUnit: 'fahrenheit' })}
+              aria-pressed={tempUnit === 'fahrenheit'}
+            >
+              °F Fahrenheit
+            </button>
+          </div>
+        </div>
+      </section>
 
     </div>
   )

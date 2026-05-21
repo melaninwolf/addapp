@@ -419,7 +419,8 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
         lat = pos.coords.latitude; lon = pos.coords.longitude
         localStorage.setItem('addapp-settings', JSON.stringify({ ...s, weatherLat: lat, weatherLon: lon }))
       }
-      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&temperature_unit=celsius`)
+      const tempUnit = s.tempUnit || 'celsius'
+      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&temperature_unit=${tempUnit}`)
       if (!r.ok) return
       const d = await r.json()
       if (d.current?.temperature_2m != null) {
@@ -490,7 +491,7 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
           <div className="entry-date">{fmtDateLong(date)}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {isToday && <span className="journal-today-tag">Today</span>}
-            {weather   && <span className="journal-chip">{weather.condition} {weather.temp}°C</span>}
+            {weather   && <span className="journal-chip">{weather.condition} {weather.temp}{(JSON.parse(localStorage.getItem('addapp-settings') || '{}').tempUnit || 'celsius') === 'fahrenheit' ? '°F' : '°C'}</span>}
             {healthLog?.energy_score && <span className="journal-chip">⚡ {healthLog.energy_score}</span>}
             {healthLog?.sleep_hours  && <span className="journal-chip">😴 {healthLog.sleep_hours}h</span>}
             {isFirstOfMonth && onOpenMonthly && (

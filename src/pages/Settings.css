@@ -241,3 +241,32 @@
 .profile-emoji  { font-size: 22px; }
 .profile-name   { font-size: 13px; font-weight: 700; color: var(--text); }
 .profile-tagline { font-size: 11px; color: var(--text3); line-height: 1.4; }
+
+/* -- Weather temperature toggle -- */
+.temp-unit-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.temp-unit-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.temp-unit-btn:hover {
+  border-color: var(--accent);
+}
+
+.temp-unit-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--text);
+  font-weight: 600;
+}
