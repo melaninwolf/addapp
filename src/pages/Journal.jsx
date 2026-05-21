@@ -491,6 +491,10 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
   const [notes,       setNotes]       = useState('')
   const [refPen,      setRefPen]      = useState({})
 
+  const saveTimerRef       = useRef(null)   // debounce handle
+  const autoSaveEnabledRef = useRef(false)  // false during initial load, true after
+  const saveRef            = useRef(null)   // always points to latest save() closure
+
   const isToday = date === todayStr()
   const [_y, _m, _d] = date.split('-').map(Number)
   const isFirstOfMonth = _d === 1
@@ -498,7 +502,20 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
 
   useEffect(() => { loadEntry() }, [date, userId]) // eslint-disable-line
 
+  // Always keep saveRef pointing at the freshest save() closure so the timer never captures stale state
+  useEffect(() => { saveRef.current = save })
+
+  // Auto-save: 2 s after any content change (skipped during initial data load)
+  useEffect(() => {
+    if (!autoSaveEnabledRef.current || !userId) return
+    clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => saveRef.current?.(), 2000)
+    return () => clearTimeout(saveTimerRef.current)
+  }, [schedule, schedulePen, priorities, priPen, mood, gratitude, proudOf, affirmation, excited, lookFwd, notes, refPen]) // eslint-disable-line
+
   async function loadEntry() {
+    autoSaveEnabledRef.current = false
+    clearTimeout(saveTimerRef.current)
     if (!userId) return
     const [entryRes, tasksRes] = await Promise.all([
       supabase.from('journal_days').select('*').eq('user_id', userId).eq('entry_date', date).maybeSingle(),
@@ -527,6 +544,8 @@ function DailyEntry({ date, userId, healthLog, onOpenMonthly }) {
       if (isToday) fetchWeather()
       else setWeather(null)
     }
+    // Re-enable auto-save after this render's effects have settled
+    setTimeout(() => { autoSaveEnabledRef.current = true }, 500)
   }
 
   async function fetchWeather() {
