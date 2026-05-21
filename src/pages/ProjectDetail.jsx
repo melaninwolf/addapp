@@ -10,18 +10,19 @@ function fmtDate(d) {
 }
 
 // ── Milestone item ────────────────────────────────────────────
-function MilestoneItem({ milestone, onMarkDone, onAddMicro, onToggleMicro, onDeleteMilestone, onMakeTask }) {
-  const [newMicro, setNewMicro] = useState('')
-  const [adding,   setAdding]   = useState(false)
+function MilestoneItem({ milestone, onMarkDone, onAddTask, onToggleTask, onDeleteMilestone }) {
+  const [newTask, setNewTask] = useState('')
+  const [adding,  setAdding]  = useState(false)
 
-  const total = milestone.micro_milestones?.length || 0
-  const done  = milestone.micro_milestones?.filter(m => m.done).length || 0
-  const pct   = total > 0 ? Math.round((done / total) * 100) : 0
+  const tasks = milestone.tasks || []
+  const total  = tasks.length
+  const done   = tasks.filter(t => t.status === 'done').length
+  const pct    = total > 0 ? Math.round((done / total) * 100) : 0
 
-  async function handleAddMicro(e) {
-    if (e.key !== 'Enter' || !newMicro.trim()) return
-    await onAddMicro(milestone.id, newMicro.trim())
-    setNewMicro('')
+  async function handleAddTask(e) {
+    if (e.key !== 'Enter' || !newTask.trim()) return
+    await onAddTask(milestone.id, newTask.trim())
+    setNewTask('')
     setAdding(false)
   }
 
@@ -61,36 +62,36 @@ function MilestoneItem({ milestone, onMarkDone, onAddMicro, onToggleMicro, onDel
         </div>
       )}
 
-      {/* Micro-milestones */}
+      {/* Tasks under this milestone */}
       <div className="mm-list">
-        {milestone.micro_milestones?.map(mm => (
+        {tasks.map(t => (
           <div
-            key={mm.id}
-            className={`mm-item${mm.done ? ' mm-done' : ''}`}
-            onClick={() => onToggleMicro(mm)}
+            key={t.id}
+            className={`mm-item${t.status === 'done' ? ' mm-done' : ''}`}
+            onClick={() => onToggleTask(t)}
           >
-            <div className={`mm-dot${mm.done ? ' mm-dot-done' : ''}`} />
-            <span className="mm-name">{mm.name}</span>
+            <div className={`mm-dot${t.status === 'done' ? ' mm-dot-done' : ''}`} />
+            <span className="mm-name">{t.title}</span>
           </div>
         ))}
       </div>
 
-      {/* Add micro */}
+      {/* Add task */}
       {adding ? (
         <input
           className="mm-add-input"
-          placeholder="Micro-milestone… (Enter to save, Esc to cancel)"
-          value={newMicro}
-          onChange={e => setNewMicro(e.target.value)}
+          placeholder="Task name… (Enter to save, Esc to cancel)"
+          value={newTask}
+          onChange={e => setNewTask(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Enter') handleAddMicro(e)
-            if (e.key === 'Escape') { setAdding(false); setNewMicro('') }
+            if (e.key === 'Enter') handleAddTask(e)
+            if (e.key === 'Escape') { setAdding(false); setNewTask('') }
           }}
-          onBlur={() => { if (!newMicro.trim()) setAdding(false) }}
+          onBlur={() => { if (!newTask.trim()) setAdding(false) }}
           autoFocus
         />
       ) : (
-        <button className="mm-add-btn" onClick={() => setAdding(true)}>+ micro-milestone</button>
+        <button className="mm-add-btn" onClick={() => setAdding(true)}>+ task</button>
       )}
     </div>
   )
@@ -154,26 +155,27 @@ export default function ProjectDetail({ userId }) {
         supabase.from('milestones').select('*').eq('project_id', id).order('order_index'),
         supabase.from('tasks').select('*').eq('project_id', id).eq('user_id', userId),
       ])
-      // Load micro_milestones by milestone IDs (no project_id column on that table)
-      const msIds = (msRes.data || []).map(m => m.id)
-      let microData = []
-      if (msIds.length > 0) {
-        const { data } = await supabase.from('micro_milestones').select('*').in('milestone_id', msIds).order('order_index')
-        microData = data || []
-      }
-      const microMap = {}
-      for (const mm of microData) {
-        if (!microMap[mm.milestone_id]) microMap[mm.milestone_id] = []
-        microMap[mm.milestone_id].push(mm)
+      // Group tasks: those with a milestone_id go under their milestone,
+      // those without are shown in the standalone Tasks section below.
+      const allTasks = taskRes.data || []
+      const milestoneTaskMap = {}
+      const standaloneTaskArr = []
+      for (const t of allTasks) {
+        if (t.milestone_id) {
+          if (!milestoneTaskMap[t.milestone_id]) milestoneTaskMap[t.milestone_id] = []
+          milestoneTaskMap[t.milestone_id].push(t)
+        } else {
+          standaloneTaskArr.push(t)
+        }
       }
       const milestones = (msRes.data || []).map(m => ({
         ...m,
-        micro_milestones: microMap[m.id] || [],
+        tasks: milestoneTaskMap[m.id] || [],
       }))
       const proj = projRes.data
       setProject(proj)
       setMilestones(milestones)
-      setTasks(taskRes.data || [])
+      setTasks(standaloneTaskArr)
 
       // Load all trigger-type routines for the selector
       const { data: triggers } = await supabase
@@ -260,22 +262,10 @@ export default function ProjectDetail({ userId }) {
   async function markMilestoneDone(milestone) {
     const newDone = !milestone.done
     await supabase.from('milestones').update({ done: newDone }).eq('id', milestone.id)
-    if (newDone && milestone.micro_milestones?.length > 0) {
-      await supabase.from('micro_milestones').update({ done: true }).eq('milestone_id', milestone.id)
+    if (newDone && milestone.tasks?.length > 0) {
+      await supabase.from('tasks').update({ status: 'done' }).eq('milestone_id', milestone.id)
     }
-    const { data: msData2 } = await supabase.from('milestones').select('*').eq('project_id', id).order('order_index')
-    const msIds2 = (msData2 || []).map(m => m.id)
-    let microData2 = []
-    if (msIds2.length > 0) {
-      const { data } = await supabase.from('micro_milestones').select('*').in('milestone_id', msIds2).order('order_index')
-      microData2 = data || []
-    }
-    const microMap2 = {}
-    for (const mm of microData2) {
-      if (!microMap2[mm.milestone_id]) microMap2[mm.milestone_id] = []
-      microMap2[mm.milestone_id].push(mm)
-    }
-    setMilestones((msData2 || []).map(m => ({ ...m, micro_milestones: microMap2[m.id] || [] })))
+    load()
   }
 
   async function deleteMilestone(msId) {
@@ -283,44 +273,38 @@ export default function ProjectDetail({ userId }) {
     setMilestones(prev => prev.filter(m => m.id !== msId))
   }
 
-  // ── Micro-milestone CRUD ──────────────────────────────────
-  async function addMicroMilestone(milestoneId, name) {
+  // ── Tasks under milestones ────────────────────────────────
+  async function addMilestoneTask(milestoneId, title) {
     const ms = milestones.find(m => m.id === milestoneId)
     const { data, error } = await supabase
-      .from('micro_milestones')
-      .insert([{ milestone_id: milestoneId, user_id: userId, name, order_index: ms?.micro_milestones?.length || 0 }])
+      .from('tasks')
+      .insert([{
+        user_id:      userId,
+        title,
+        status:       'todo',
+        priority:     'medium',
+        project_id:   id,
+        milestone_id: milestoneId,
+        recurrence:   'none',
+        sort_order:   (ms?.tasks?.length || 0) * 10,
+      }])
       .select()
     if (!error && data) {
       setMilestones(prev => prev.map(m =>
         m.id === milestoneId
-          ? { ...m, micro_milestones: [...(m.micro_milestones || []), data[0]] }
+          ? { ...m, tasks: [...(m.tasks || []), data[0]] }
           : m
       ))
     }
   }
 
-  async function makeTaskFromMicro(mm) {
-    if (!userId) return
-    await supabase.from('tasks').insert([{
-      user_id: userId,
-      title: mm.name,
-      status: 'todo',
-      priority: 'medium',
-      project_id: project?.id || null,
-      recurrence: 'none',
-      sort_order: Date.now(),
-    }])
-    // mark the micro-milestone done
-    await toggleMicroMilestone(mm)
-  }
-
-  async function toggleMicroMilestone(mm) {
-    const newDone = !mm.done
-    await supabase.from('micro_milestones').update({ done: newDone }).eq('id', mm.id)
+  async function toggleMilestoneTask(task) {
+    const newStatus = task.status === 'done' ? 'todo' : 'done'
+    await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
     setMilestones(prev => prev.map(m => ({
       ...m,
-      micro_milestones: m.micro_milestones?.map(x =>
-        x.id === mm.id ? { ...x, done: newDone } : x
+      tasks: m.tasks?.map(t =>
+        t.id === task.id ? { ...t, status: newStatus } : t
       ),
     })))
   }
@@ -567,10 +551,9 @@ export default function ProjectDetail({ userId }) {
                 key={ms.id}
                 milestone={ms}
                 onMarkDone={markMilestoneDone}
-                onAddMicro={addMicroMilestone}
-                onToggleMicro={toggleMicroMilestone}
+                onAddTask={addMilestoneTask}
+                onToggleTask={toggleMilestoneTask}
                 onDeleteMilestone={deleteMilestone}
-                onMakeTask={makeTaskFromMicro}
               />
             ))}
           </div>

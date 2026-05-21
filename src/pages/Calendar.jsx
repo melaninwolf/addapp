@@ -1677,6 +1677,19 @@ export default function Calendar({ userId }) {
     if (!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
         import.meta.env.VITE_GOOGLE_CLIENT_ID === 'PASTE_YOUR_CLIENT_ID_HERE') return
 
+    // On native Android the GIS JS library can't load in a WebView —
+    // the native PKCE flow handles auth directly, so mark ready immediately.
+    if (isNativeApp()) {
+      setGisReady(true)
+      if (isConnected()) {
+        silentReconnect(
+          (token) => { setGcalToken(token); fetchGcalEvents(token) },
+          ()      => { setGcalToken(null) }
+        )
+      }
+      return
+    }
+
     loadGIS().then(() => {
       setGisReady(true)
       if (isConnected()) {

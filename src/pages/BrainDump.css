@@ -208,6 +208,69 @@
 
 .bd-clear-btn:hover { color: var(--danger, #e24b4a); }
 
+/* ── Pen mode ────────────────────────────────────────────── */
+
+.bd-section-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bd-pen-btn {
+  background: var(--bg3, #2a2a2a);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  min-height: 28px;
+}
+
+.bd-pen-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.bd-pen-btn:not(.active):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.bd-pen-clear {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s;
+  min-height: 28px;
+}
+
+.bd-pen-clear:hover { color: var(--danger, #e24b4a); }
+
+.bd-dump-wrap {
+  position: relative;
+}
+
+.bd-pen-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  cursor: crosshair;
+  touch-action: none;
+  z-index: 2;
+}
+
 /* ── Mobile tweaks ───────────────────────────────────────── */
 
 @media (max-width: 600px) {

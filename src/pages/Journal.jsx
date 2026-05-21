@@ -1610,6 +1610,10 @@ export default function Journal({ userId }) {
   const [monthlySubView, setMonthlySubView] = useState('review')
   const [monthlyMonth,   setMonthlyMonth]   = useState(() => todayStr().slice(0, 7))
   const [yearlyYear,     setYearlyYear]     = useState(() => new Date().getFullYear())
+  // Collapse calendar by default on native (tablet/phone) to save space
+  const [calCollapsed,   setCalCollapsed]   = useState(() => {
+    try { return window.Capacitor?.isNativePlatform() ?? false } catch { return false }
+  })
 
   const journalBodyRef = useRef(null)
   usePinchZoom(journalBodyRef)
@@ -1664,16 +1668,26 @@ export default function Journal({ userId }) {
       <div className="journal-body" ref={journalBodyRef}>
         {/* Left: calendar (shown on daily + weekly view) */}
         {(view === 'daily' || view === 'weekly') && (
-          <MonthCalendar
-            selectedDate={selectedDate}
-            onSelectDate={handleSelectDate}
-            loggedDates={loggedDates}
-          />
+          <div className={`journal-cal-wrap${calCollapsed ? ' cal-collapsed' : ''}`}>
+            <button
+              className="cal-collapse-btn"
+              onClick={() => setCalCollapsed(c => !c)}
+              title={calCollapsed ? 'Show calendar' : 'Hide calendar'}
+            >
+              {calCollapsed ? '📅' : '×'}
+            </button>
+            {!calCollapsed && (
+              <MonthCalendar
+                selectedDate={selectedDate}
+                onSelectDate={handleSelectDate}
+                loggedDates={loggedDates}
+              />
+            )}
+          </div>
         )}
 
         {/* Right: content */}
         <div className="journal-main">
-          {view === 'daily'     && <DailyEntry key={selectedDate} date={selectedDate} userId={userId} healthLog={healthLog} onLogged={markLogged} onOpenMonthly={openMonthly} />}
           {view === 'daily'     && <DailyEntry key={selectedDate} date={selectedDate} userId={userId} healthLog={healthLog} onLogged={markLogged} onOpenMonthly={openMonthly} />}
           {view === 'weekly'    && <WeeklyView weekStart={weekStart} userId={userId} />}
           {view === 'monthly'   && <MonthlyPage month={monthlyMonth} onMonthChange={setMonthlyMonth} subView={monthlySubView} onSubViewChange={setMonthlySubView} userId={userId} />}

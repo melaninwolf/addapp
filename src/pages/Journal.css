@@ -42,6 +42,40 @@
   min-height: 0;
 }
 
+/* ── Collapsible calendar wrapper ─────────────────────────────── */
+.journal-cal-wrap {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.journal-cal-wrap.cal-collapsed {
+  width: 36px;
+}
+.cal-collapse-btn {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  z-index: 10;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.cal-collapse-btn:hover { background: var(--bg4); color: var(--text1); }
+.journal-cal-wrap.cal-collapsed .cal-collapse-btn {
+  position: static;
+  margin: 8px auto 0;
+}
+
 /* ── Left calendar panel ──────────────────────────────────────── */
 .cal-panel {
   width: 240px;
