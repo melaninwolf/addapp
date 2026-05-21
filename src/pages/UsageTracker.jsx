@@ -490,6 +490,10 @@ export default function UsageTracker({ userId }) {
   const [shameRoutines,  setShameRoutines]  = useState([])
   const [shameHistory,   setShameHistory]   = useState([])
 
+  // Cross-device synced usage (from device_usage_sync)
+  const [syncedToday, setSyncedToday] = useState({}) // pkg → { total_min, device_count }
+  const [syncedWeek,  setSyncedWeek]  = useState({}) // pkg → { [date]: total_min }
+
   // ── Load everything on mount ──────────────────────────────
   useEffect(() => {
     if (!userId) return
@@ -508,11 +512,49 @@ export default function UsageTracker({ userId }) {
       if (!document.hidden) {
         checkPendingShame()
         loadNativeUsage()
+        loadSyncedUsage()
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [userId, blockers])
+
+  async function loadSyncedUsage() {
+    if (!userId) return
+    const now = new Date()
+    const wks = new Date(now); wks.setDate(now.getDate() - 6)
+    const { data } = await supabase.from('device_usage_sync')
+      .select('package_name, minutes, device_id, date')
+      .eq('user_id', userId)
+      .gte('date', wks.toISOString().split('T')[0])
+    if (!data) return
+
+    const today = todayStr()
+    const todayMap = {}
+    const weekMap  = {}
+
+    for (const row of data) {
+      // today aggregate
+      if (row.date === today) {
+        if (!todayMap[row.package_name])
+          todayMap[row.package_name] = { total_min: 0, devices: new Set() }
+        todayMap[row.package_name].total_min    += row.minutes || 0
+        todayMap[row.package_name].devices.add(row.device_id)
+      }
+      // week aggregate
+      if (!weekMap[row.package_name]) weekMap[row.package_name] = {}
+      weekMap[row.package_name][row.date] =
+        (weekMap[row.package_name][row.date] || 0) + (row.minutes || 0)
+    }
+
+    // Convert Sets to counts for serialisability
+    const todayFinal = {}
+    for (const [pkg, v] of Object.entries(todayMap))
+      todayFinal[pkg] = { total_min: v.total_min, device_count: v.devices.size }
+
+    setSyncedToday(todayFinal)
+    setSyncedWeek(weekMap)
+  }
 
   async function loadAll() {
     const now = new Date()
@@ -527,9 +569,42 @@ export default function UsageTracker({ userId }) {
     ])
     setLogs(logsRes.data || [])
     setLimits(limitsRes.data || [])
-    setBlockers(blockersRes.data || [])
-    if (Capacitor.isNativePlatform() && blockersRes.data?.length) {
-      loadNativeUsage(blockersRes.data)
+    const loadedBlockers = blockersRes.data || []
+    setBlockers(loadedBlockers)
+
+    // Load cross-device synced usage
+    loadSyncedUsage()
+
+    if (Capacitor.isNativePlatform() && loadedBlockers.length) {
+      loadNativeUsage(loadedBlockers)
+
+      // Auto-start tracking if permission is granted — no manual tap needed
+      try {
+        const permRes = await NativeUT?.checkUsagePermission()
+        if (permRes?.granted) {
+          setPermGranted(true)
+          const trackRes = await NativeUT?.isTracking()
+          if (!trackRes?.active) {
+            const apps = loadedBlockers.map(b => ({
+              id:           b.id,
+              packageName:  b.package_name,
+              appName:      b.app_name,
+              limitMinutes: b.daily_limit_minutes,
+              majorGoal:    b.major_goal || '',
+              emoji:        b.emoji || '📱',
+            }))
+            await NativeUT?.startTracking({
+              apps,
+              userId,
+              supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+              supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            })
+            setIsTracking(true)
+          } else {
+            setIsTracking(true)
+          }
+        }
+      } catch {}
     }
   }
 
@@ -884,7 +959,10 @@ export default function UsageTracker({ userId }) {
             <div className="ut-section">
               <div className="ut-section-title">Distraction apps</div>
               {blockers.map(b => {
-                const usedMin = nativeUsage[b.package_name] ?? null
+                // Prefer cross-device synced total; fall back to local native usage
+                const synced    = syncedToday[b.package_name]
+                const usedMin   = synced?.total_min ?? nativeUsage[b.package_name] ?? null
+                const multiDev  = synced?.device_count > 1
                 const overLimit = usedMin !== null && usedMin >= b.daily_limit_minutes
                 return (
                   <div key={b.id} className={`ut-blocker-row${overLimit ? ' over-limit' : ''}`}>
@@ -896,7 +974,7 @@ export default function UsageTracker({ userId }) {
                         Limit: {fmtMins(b.daily_limit_minutes)}
                         {usedMin !== null && (
                           <span className={`ut-blocker-usage ${overLimit ? 'over' : ''}`}>
-                            · {fmtMins(usedMin)} used today{overLimit ? ' ⚠️' : ''}
+                            · {fmtMins(usedMin)} today{multiDev ? ` (${synced.device_count} devices)` : ''}{overLimit ? ' ⚠️' : ''}
                           </span>
                         )}
                       </div>
@@ -940,43 +1018,75 @@ export default function UsageTracker({ userId }) {
               if (nd <= todayStr()) setDate(nd)
             }} disabled={date >= todayStr()}>›</button>
           </div>
-          {todayLogs.length === 0 ? (
+
+          {/* ── Auto-tracked apps (from device_usage_sync, all devices) ── */}
+          {date === todayStr() && blockers.length > 0 && (
+            <div className="ut-section">
+              <div className="ut-section-title" style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span>Tracked apps — all devices</span>
+                <button className="btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={loadSyncedUsage}>↻ Refresh</button>
+              </div>
+              {blockers.map(b => {
+                const synced    = syncedToday[b.package_name]
+                const usedMin   = synced?.total_min ?? nativeUsage[b.package_name] ?? 0
+                const multiDev  = synced?.device_count > 1
+                const overLimit = usedMin > 0 && usedMin >= b.daily_limit_minutes
+                const pct       = Math.min((usedMin / b.daily_limit_minutes) * 100, 100)
+                return (
+                  <div key={b.id} className="ut-bar-row">
+                    <div className="ut-bar-info">
+                      <span className="ut-bar-emoji">{b.emoji}</span>
+                      <span className="ut-bar-label">{b.app_name}</span>
+                      <span className="ut-bar-time">{fmtMins(usedMin)}</span>
+                      <span className={`ut-bar-limit${overLimit ? ' over' : ''}`}>
+                        / {fmtMins(b.daily_limit_minutes)}
+                        {multiDev && <span style={{ color:'var(--text3)', marginLeft:4, fontSize:11 }}>({synced.device_count} devices)</span>}
+                        {overLimit && ' ⚠️'}
+                      </span>
+                    </div>
+                    <div className="ut-bar-track">
+                      <div className="ut-bar-fill" style={{
+                        width: `${pct}%`,
+                        background: overLimit ? '#ef4444' : 'var(--accent)',
+                      }} />
+                    </div>
+                  </div>
+                )
+              })}
+              {blockers.every(b => !syncedToday[b.package_name] && !nativeUsage[b.package_name]) && (
+                <div style={{ color:'var(--text3)', fontSize:13, padding:'8px 0' }}>
+                  No usage recorded yet today. Tracking will update automatically.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Manual logs (secondary) ── */}
+          {todayLogs.length > 0 && (
+            <div className="ut-section">
+              <div className="ut-section-title">Manual logs</div>
+              {todayLogs.map(l => (
+                <div key={l.id} className={`ut-entry${l.is_distraction ? ' distraction' : ''}`}>
+                  <span className="ut-entry-emoji">{getCatEmoji(l.category)}</span>
+                  <div className="ut-entry-body">
+                    <span className="ut-entry-app">{l.app_name}</span>
+                    {l.note && <span className="ut-entry-note">{l.note}</span>}
+                  </div>
+                  <span className="ut-entry-dur">{fmtMins(l.duration_min)}</span>
+                  {l.is_distraction && <span className="ut-distraction-tag">distraction</span>}
+                  <button className="ut-del-btn" onClick={() => deleteLog(l.id)} title="Remove">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Empty state (past days with no data) ── */}
+          {date !== todayStr() && todayLogs.length === 0 && (
             <div className="ut-empty">
               <div style={{ fontSize: 36 }}>📱</div>
               <p>No usage logged for this day.</p>
               <button className="btn-primary" onClick={() => setShowLog(true)}>+ Log usage</button>
             </div>
-          ) : (
-            <>
-              <div className="ut-section">
-                <div className="ut-section-title">By app</div>
-                {Object.entries(appTotals)
-                  .sort((a, b) => b[1].mins - a[1].mins)
-                  .map(([app, { mins, category }]) => {
-                    const limit = limits.find(l => l.app_name.toLowerCase() === app.toLowerCase())
-                    return (
-                      <UsageBar key={app} label={app}
-                        emoji={getCatEmoji(category)} mins={mins}
-                        limitMins={limit?.daily_limit_min} color={getCatColor(category)} />
-                    )
-                  })}
-              </div>
-              <div className="ut-section">
-                <div className="ut-section-title">Log entries</div>
-                {todayLogs.map(l => (
-                  <div key={l.id} className={`ut-entry${l.is_distraction ? ' distraction' : ''}`}>
-                    <span className="ut-entry-emoji">{getCatEmoji(l.category)}</span>
-                    <div className="ut-entry-body">
-                      <span className="ut-entry-app">{l.app_name}</span>
-                      {l.note && <span className="ut-entry-note">{l.note}</span>}
-                    </div>
-                    <span className="ut-entry-dur">{fmtMins(l.duration_min)}</span>
-                    {l.is_distraction && <span className="ut-distraction-tag">distraction</span>}
-                    <button className="ut-del-btn" onClick={() => deleteLog(l.id)} title="Remove">✕</button>
-                  </div>
-                ))}
-              </div>
-            </>
           )}
         </div>
       )}
@@ -984,12 +1094,47 @@ export default function UsageTracker({ userId }) {
       {/* ── WEEK TAB ── */}
       {activeTab === 'week' && (
         <div className="ut-tab-content">
+          {/* Cross-device per-app week breakdown */}
+          {blockers.length > 0 && Object.keys(syncedWeek).length > 0 && (
+            <div className="ut-section">
+              <div className="ut-section-title">Tracked apps — last 7 days (all devices)</div>
+              {blockers.map(b => {
+                const byDay = syncedWeek[b.package_name] || {}
+                const weekTotal_b = Object.values(byDay).reduce((a, v) => a + v, 0)
+                if (!weekTotal_b) return null
+                return (
+                  <div key={b.id} className="ut-bar-row">
+                    <div className="ut-bar-info">
+                      <span className="ut-bar-emoji">{b.emoji}</span>
+                      <span className="ut-bar-label">{b.app_name}</span>
+                      <span className="ut-bar-time">{fmtMins(weekTotal_b)}</span>
+                      <span className="ut-bar-limit">avg {fmtMins(Math.round(weekTotal_b / 7))}/day</span>
+                    </div>
+                    <div className="ut-bar-track">
+                      <div className="ut-bar-fill" style={{
+                        width: `${Math.min((weekTotal_b / (b.daily_limit_minutes * 7)) * 100, 100)}%`,
+                        background: weekTotal_b > b.daily_limit_minutes * 7 ? '#ef4444' : 'var(--accent)',
+                      }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           <div className="ut-section">
             <div className="ut-section-title">Last 7 days</div>
             <div className="ut-week-bars">
               {days7.map(d => {
-                const mins = weekByDay[d] || 0
-                const pct  = (mins / maxDayMins) * 100
+                // Merge manual logs + synced data for the bar chart
+                const syncMins = blockers.reduce((acc, b) => acc + (syncedWeek[b.package_name]?.[d] || 0), 0)
+                const mins = Math.max(weekByDay[d] || 0, syncMins)
+                const maxMins = Math.max(
+                  ...days7.map(dd => Math.max(
+                    weekByDay[dd] || 0,
+                    blockers.reduce((acc, b) => acc + (syncedWeek[b.package_name]?.[dd] || 0), 0)
+                  )), 1)
+                const pct  = (mins / maxMins) * 100
                 const isToday = d === todayStr()
                 return (
                   <div key={d} className="ut-week-col">

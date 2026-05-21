@@ -194,3 +194,24 @@ create index if not exists idx_journal_weeks_user       on public.journal_weeks(
 create index if not exists idx_journal_qr_user          on public.journal_quarterly_reviews(user_id, quarter);
 create index if not exists idx_journal_mr_user          on public.journal_monthly_reviews(user_id, month);
 create index if not exists idx_journal_mg_user          on public.journal_monthly_glance(user_id, month);
+
+-- ── Device usage sync (cross-device screen time) ─────────────
+create table if not exists public.device_usage_sync (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  device_id    text not null,
+  package_name text not null,
+  app_name     text,
+  date         date not null,
+  minutes      bigint not null default 0,
+  updated_at   timestamptz not null default now(),
+  unique (user_id, device_id, package_name, date)
+);
+alter table public.device_usage_sync add column if not exists app_name text;
+alter table public.device_usage_sync enable row level security;
+do $$ begin
+  create policy "own device_usage_sync" on public.device_usage_sync
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+create index if not exists idx_device_usage_sync_user_date
+  on public.device_usage_sync(user_id, date);

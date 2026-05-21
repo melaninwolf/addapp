@@ -1316,7 +1316,7 @@ export default function Routines({ userId }) {
         <span className="routines-stats-text">
           {doneToday > 0
             ? <><span className="stats-done">{doneToday} done today &middot; +{doneToday * 5}g matter</span></>
-            : <span className="stats-hint">Nothing done yet today &mdash; start a routine \U0001f680</span>
+            : <span className="stats-hint">Nothing done yet today &mdash; start a routine 🚀</span>
           }
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1345,7 +1345,7 @@ export default function Routines({ userId }) {
               <div className="rc-info">
                 <div className="rc-name-row">
                   <div className="rc-name">{r.name}</div>
-                  {r.type === 'trigger' && <span className="rc-trigger-badge">\U0001f579️ Trigger</span>}
+                  {r.type === 'trigger' && <span className="rc-trigger-badge">🕹️ Trigger</span>}
                   {isDoneToday && todayLog.status === 'marked_done' && (
                     <button className="rc-done-badge" onClick={() => undoMarkDone(r.id)} title="Click to undo">✓ done today ↩</button>
                   )}
@@ -1395,7 +1395,7 @@ export default function Routines({ userId }) {
             )}
             {triggerList.length > 0 && (
               <>
-                <div className="section-label section-label-trigger">\U0001f579️ Triggers</div>
+                <div className="section-label section-label-trigger">🕹️ Triggers</div>
                 <div className="routine-grid">{triggerList.map(renderCard)}</div>
               </>
             )}
@@ -1425,7 +1425,7 @@ export default function Routines({ userId }) {
           <div className="modal" style={{maxWidth: 400}} onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Delete routine</h2>
-              <button className="modal-close" onClick={() => setDeleteConfirm(null)}>\xd7</button>
+              <button className="modal-close" onClick={() => setDeleteConfirm(null)}>×</button>
             </div>
             <div className="modal-body">
               <p style={{fontSize: 14, color: 'var(--text2)', lineHeight: 1.6}}>
@@ -1445,7 +1445,7 @@ export default function Routines({ userId }) {
           <div className="modal" style={{maxWidth: 360}} onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Edit session times</h2>
-              <button className="modal-close" onClick={() => setEditLogModal(null)}>\xd7</button>
+              <button className="modal-close" onClick={() => setEditLogModal(null)}>×</button>
             </div>
             <div className="modal-body">
               <p style={{fontSize:13, color:'var(--text2)', marginBottom:'1.25rem', lineHeight:1.5}}>
