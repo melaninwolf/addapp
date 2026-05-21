@@ -142,6 +142,9 @@ function formatTimer(secs) {
 // The last entry (3600 = 60 min) also triggers auto-pause.
 const ESCALATION_OFFSETS = [0, 120, 300, 600, 900, 1800, 2700, 3600]
 
+// localStorage key for persisting the running session across navigation
+const SESSION_KEY = 'addapp-running-session'
+
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function RoutineModal({ routine, onSave, onClose }) {
   const [name, setName] = useState(routine?.name || '')
@@ -357,10 +360,12 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   const [autoPaused, setAutoPaused] = useState(false)
   const autoPausedRef               = useRef(false)
 
-  const timerRef       = useRef(null)
-  const hiddenAtRef    = useRef(null)
-  const pausedRef      = useRef(false)
-  const firedAlertsRef = useRef(new Set()) // tracks which ESCALATION_OFFSETS have fired for the current step
+  const timerRef            = useRef(null)
+  const hiddenAtRef         = useRef(null)
+  const pausedRef           = useRef(false)
+  const firedAlertsRef      = useRef(new Set()) // tracks which ESCALATION_OFFSETS have fired for the current step
+  const restoredElapsedRef  = useRef(null)       // set before a stepIdx change to seed elapsed instead of 0
+  const stepStartedAtRef    = useRef(Date.now()) // wall-clock ms when the current step began (for session restore)
 
   const step = queue[stepIdx]
   const isDeferred = step?.deferred || false
@@ -369,7 +374,14 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   const pct = totalSecs > 0 ? Math.min(100, Math.round((elapsed / totalSecs) * 100)) : 0
   const upcoming = queue.slice(stepIdx + 1)
 
-  useEffect(() => { setElapsed(0); setPaused(false); firedAlertsRef.current = new Set() }, [stepIdx])
+  useEffect(() => {
+    const restored = restoredElapsedRef.current
+    restoredElapsedRef.current = null
+    setElapsed(restored !== null ? restored : 0)
+    setPaused(false)
+    firedAlertsRef.current = new Set()
+    stepStartedAtRef.current = Date.now() - (restored || 0) * 1000
+  }, [stepIdx])
 
   // Keep pausedRef in sync so the visibility handler always sees current value
   useEffect(() => { pausedRef.current = paused }, [paused])
@@ -417,8 +429,26 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [])
 
-  // ── On mount: check for an existing unfinished log today ──
+  // ── On mount: restore from localStorage first, fall back to DB ──
   useEffect(() => {
+    // 1. Check localStorage — fast, no network, no prompt needed
+    try {
+      const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null')
+      if (saved && saved.routineId === routine.id && typeof saved.stepIdx === 'number') {
+        // Recalculate elapsed from wall clock so the timer reflects time away
+        const wallElapsed = saved.stepStartedAt
+          ? Math.floor((Date.now() - saved.stepStartedAt) / 1000)
+          : 0
+        restoredElapsedRef.current = Math.max(0, wallElapsed)
+        if (saved.logId)    setLogId(saved.logId)
+        if (saved.startedAt) setStartedAt(saved.startedAt)
+        setStepIdx(saved.stepIdx)
+        setInitState('running')
+        return // skip DB check entirely
+      }
+    } catch(e) {}
+
+    // 2. Fall back to DB check
     if (!userId) { setInitState('running'); initFreshLog(); return }
     const todayStr = new Date().toISOString().split('T')[0]
     supabase.from('routine_logs')
@@ -442,6 +472,24 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       })
   }, []) // eslint-disable-line
 
+  // ── Persist session to localStorage whenever key state changes ──
+  useEffect(() => {
+    if (initState !== 'running') return
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        routineId:    routine.id,
+        stepIdx,
+        stepStartedAt: stepStartedAtRef.current,
+        logId:        logId   || null,
+        startedAt:    startedAt || null,
+      }))
+    } catch(e) {}
+  }, [stepIdx, logId, startedAt, initState]) // eslint-disable-line
+
+  function clearSession() {
+    try { localStorage.removeItem(SESSION_KEY) } catch(e) {}
+  }
+
   async function initFreshLog() {
     const now = new Date().toISOString()
     setStartedAt(now)
@@ -453,13 +501,25 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   }
 
   function continueFromLog() {
+    const idx = existingLog.step_index || 0
     setLogId(existingLog.id)
     setStartedAt(existingLog.started_at)
-    setStepIdx(existingLog.step_index || 0)
+    setStepIdx(idx)
     setInitState('running')
+    // Seed localStorage now so future navigations restore correctly
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        routineId:    routine.id,
+        stepIdx:      idx,
+        stepStartedAt: Date.now(),
+        logId:        existingLog.id,
+        startedAt:    existingLog.started_at,
+      }))
+    } catch(e) {}
   }
 
   async function startFresh() {
+    clearSession()
     if (existingLog && userId) {
       supabase.from('routine_logs')
         .update({ status: 'abandoned', ended_at: new Date().toISOString() })
@@ -655,6 +715,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
     const nextIdx = stepIdx + 1
     if (nextIdx >= newQueue.length) {
       clearInterval(timerRef.current)
+      clearSession()
       setStepLog(newLog)
       setQueue(newQueue)
       setDeferred(newDeferred)
@@ -697,6 +758,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
     showToast(`"${step.name}" moved to end of routine`)
     if (stepIdx >= newQueue.length) {
       clearInterval(timerRef.current)
+      clearSession()
       const log = { name: step.name, target: step.dur * 60, actual: elapsed, status: 'deferred' }
       const newLog = [...stepLog, log]
       setStepLog(newLog)
@@ -842,7 +904,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       )}
 
       <div className="runner-header">
-        <button className="btn-ghost-sm" onClick={onFinish}>← Exit routine</button>
+        <button className="btn-ghost-sm" onClick={() => { clearSession(); onFinish() }}>← Exit routine</button>
         <div className="runner-breadcrumb">Step {stepIdx + 1} of {queue.length} · {routine.emoji} {routine.name}</div>
       </div>
 
@@ -1036,7 +1098,18 @@ export default function Routines({ userId }) {
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
-        if (!error) setRoutines(data || [])
+        if (!error) {
+          const loaded = data || []
+          setRoutines(loaded)
+          // Auto-restore a running session if the user navigated away mid-routine
+          try {
+            const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null')
+            if (saved?.routineId) {
+              const r = loaded.find(x => x.id === saved.routineId)
+              if (r) setRunning(r)
+            }
+          } catch(e) {}
+        }
         setDbLoading(false)
       })
   }, [userId])
