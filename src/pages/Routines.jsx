@@ -377,11 +377,15 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   useEffect(() => {
     const restored = restoredElapsedRef.current
     restoredElapsedRef.current = null
-    setElapsed(restored !== null ? restored : 0)
+    const startElapsed = restored !== null ? restored : 0
+    setElapsed(startElapsed)
     setPaused(false)
     firedAlertsRef.current = new Set()
-    stepStartedAtRef.current = Date.now() - (restored || 0) * 1000
-  }, [stepIdx])
+    stepStartedAtRef.current = Date.now() - startElapsed * 1000
+    // Proactively schedule the step-end notification so it fires even if JS is suspended
+    const currentStep = queue[stepIdx]
+    if (currentStep) scheduleStepEndNotif(currentStep, startElapsed)
+  }, [stepIdx]) // eslint-disable-line
 
   // Keep pausedRef in sync so the visibility handler always sees current value
   useEffect(() => { pausedRef.current = paused }, [paused])
@@ -407,22 +411,23 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   useEffect(() => {
     clearInterval(timerRef.current)
     if (!paused) {
-      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+      // Use stepStartedAtRef (absolute wall-clock timestamp) so the timer
+      // self-corrects after screen lock, app backgrounding, or tab switching.
+      timerRef.current = setInterval(
+        () => setElapsed(Math.floor((Date.now() - stepStartedAtRef.current) / 1000)),
+        1000
+      )
     }
     return () => clearInterval(timerRef.current)
   }, [stepIdx, paused])
 
-  // Page Visibility API — recover time lost while tab was backgrounded on mobile
+  // Page Visibility API — recalculate elapsed from the absolute timestamp the
+  // moment the page becomes visible again. This covers: Chrome tab switch,
+  // Android app switch, and screen unlock (where JS was fully suspended).
   useEffect(() => {
     function handleVisibility() {
-      if (document.hidden) {
-        hiddenAtRef.current = Date.now()
-      } else {
-        if (hiddenAtRef.current !== null && !pausedRef.current) {
-          const secondsAway = Math.floor((Date.now() - hiddenAtRef.current) / 1000)
-          if (secondsAway > 0) setElapsed(e => e + secondsAway)
-        }
-        hiddenAtRef.current = null
+      if (!document.hidden && !pausedRef.current) {
+        setElapsed(Math.floor((Date.now() - stepStartedAtRef.current) / 1000))
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -611,7 +616,58 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
     } catch(e) {}
   }
 
-  function resetTimer() { setElapsed(0) }
+  function resetTimer() {
+    stepStartedAtRef.current = Date.now()
+    setElapsed(0)
+    // Reschedule the step-end notification from the new start time
+    scheduleStepEndNotif(step)
+  }
+
+  // ── Proactive step-end notification (fires even when screen is locked) ──────
+  // Scheduled at step start so the OS handles delivery — not JS.
+  const STEP_END_NOTIF_ID = 88800
+
+  async function scheduleStepEndNotif(stepObj, elapsedSecs = 0) {
+    if (!stepObj) return
+    const remainingSecs = stepObj.dur * 60 - elapsedSecs
+    if (remainingSecs <= 0) return
+    try {
+      await LocalNotifications.cancel({ notifications: [{ id: STEP_END_NOTIF_ID }] })
+      await LocalNotifications.schedule({
+        notifications: [{
+          id: STEP_END_NOTIF_ID,
+          title: `⏰ ${stepObj.name} — time's up!`,
+          body: "Mark it done, skip, or keep going.",
+          channelId: 'addapp-routines',
+          schedule: { at: new Date(Date.now() + remainingSecs * 1000), allowWhileIdle: true },
+        }]
+      })
+    } catch (e) {
+      // Web fallback — best-effort, gets throttled in background tabs
+      if ('Notification' in window && Notification.permission === 'granted') {
+        setTimeout(() => {
+          try { new Notification(`⏰ ${stepObj.name} — time's up!`, { body: "Mark it done, skip, or keep going.", tag: 'addapp-step-end', renotify: true }) } catch(_) {}
+        }, remainingSecs * 1000)
+      }
+    }
+  }
+
+  async function cancelStepEndNotif() {
+    try { await LocalNotifications.cancel({ notifications: [{ id: STEP_END_NOTIF_ID }] }) } catch (e) {}
+  }
+
+  // ── Pause toggle (keeps stepStartedAtRef in sync so timer resumes correctly) ──
+  function togglePause() {
+    if (paused) {
+      // Unpausing: shift start time forward so elapsed continues from where it was
+      stepStartedAtRef.current = Date.now() - elapsed * 1000
+      scheduleStepEndNotif(step, elapsed) // reschedule for remaining time
+      setPaused(false)
+    } else {
+      cancelStepEndNotif()
+      setPaused(true)
+    }
+  }
 
   async function fireOverdueAlert(offset) {
     const mins = Math.round(offset / 60)
@@ -711,6 +767,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
   }
 
   function advance(newQueue, newDeferred, newDoneCount, newSkipped, logEntry) {
+    cancelStepEndNotif() // cancel the current step's scheduled notification
     const newLog = logEntry ? [...stepLog, logEntry] : stepLog
     const nextIdx = stepIdx + 1
     if (nextIdx >= newQueue.length) {
@@ -769,9 +826,15 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       addMAM(xpEarnedLater)
       fireNotif(xpEarnedLater)
     } else {
+      cancelStepEndNotif()
       setQueue(newQueue)
       setDeferred(newDeferred)
       setElapsed(0)
+      stepStartedAtRef.current = Date.now()
+      firedAlertsRef.current = new Set()
+      // Schedule end notif for the new current step (queue[stepIdx] after state update)
+      const nextStep = newQueue[stepIdx]
+      if (nextStep) scheduleStepEndNotif(nextStep, 0)
     }
   }
 
@@ -918,7 +981,7 @@ function RoutineRunner({ routine, onFinish, onStartFocus, userId }) {
       <div className={`step-card ${isDeferred ? 'deferred' : ''} ${isOverTime ? 'overtime' : ''}`}>
         <div className="step-card-top-row">
           <div className="step-card-label">{isDeferred ? '🔁 deferred step' : 'current step'}</div>
-          <button className="pause-timer-btn" onClick={() => setPaused(p => !p)} title={paused ? 'Resume' : 'Pause'}>
+          <button className="pause-timer-btn" onClick={togglePause} title={paused ? 'Resume' : 'Pause'}>
             {paused ? '▶' : '⏸'}
           </button>
           <button className="reset-timer-btn" onClick={resetTimer} title="Reset timer">↺</button>
